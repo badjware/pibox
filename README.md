@@ -1,3 +1,3 @@
-# tau
+# pibox
 
 a better pi

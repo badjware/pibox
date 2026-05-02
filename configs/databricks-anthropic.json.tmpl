@@ -1,0 +1,27 @@
+{
+  "providers": {
+    "databricks-anthropic": {
+      "baseUrl": "${ANTHROPIC_BASE_URL}",
+      "apiKey": "ANTHROPIC_AUTH_TOKEN",
+      "api": "anthropic-messages",
+      "compat": {
+        "supportsEagerToolInputStreaming": true,
+        "supportsLongCacheRetention": true
+      },
+      "models": [
+        {
+          "id": "${ANTHROPIC_DEFAULT_OPUS_MODEL}",
+          "reasoning": true
+        },
+        {
+          "id": "${ANTHROPIC_DEFAULT_SONNET_MODEL}",
+          "reasoning": true
+        },
+        {
+          "id": "${ANTHROPIC_DEFAULT_HAIKU_MODEL}",
+          "reasoning": true
+        }
+      ]
+    }
+  }
+}
