@@ -25,6 +25,17 @@ while [[ $# -gt 0 ]]; do
     if [[ "$1" == "--config-tmpl" && -n "$2" && -f "$2" ]]; then
         tmpcfg=$(mktemp)
         envsubst < "$2" > "$tmpcfg"
+
+        # If a models.json already exists on the host, deep-merge it with the
+        # rendered template so that both sets of providers are available inside
+        # the container.  Template values take precedence on key conflicts.
+        if [[ -f "$HOME/.pi/agent/models.json" ]]; then
+            merged=$(mktemp)
+            jq -s '.[0] * .[1]' "$HOME/.pi/agent/models.json" "$tmpcfg" > "$merged"
+            rm "$tmpcfg"
+            tmpcfg="$merged"
+        fi
+
         docker_extra_args+=" -v $tmpcfg:/home/$HOST_USER/.pi/agent/models.json:ro"
         trap cleanup EXIT
         shift 2
