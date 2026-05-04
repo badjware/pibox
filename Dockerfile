@@ -6,13 +6,8 @@ RUN apt-get update && apt-get upgrade -y \
     && userdel -r ubuntu \
     && rm -rf /var/lib/apt/lists/*
 
-# drop root privileges
-USER 1000
+COPY entrypoint.sh /entrypoint.sh
 
-RUN mkdir -p /home/ubuntu/work /home/ubuntu/.pi
+WORKDIR /
 
-WORKDIR /home/ubuntu/work
-
-VOLUME ["/home/ubuntu/work", "/home/ubuntu/.pi"]
-
-ENTRYPOINT ["pi"]
+ENTRYPOINT ["/entrypoint.sh"]

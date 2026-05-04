@@ -4,8 +4,12 @@ IMAGE_NAME="pi"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 WORKDIR="$(pwd -P)"
 
+HOST_UID="${HOST_UID:-$(id -u)}"
+HOST_GID="${HOST_GID:-$(id -g)}"
+HOST_USER="${HOST_USER:-$(id -un)}"
+
 if ! docker image inspect "$IMAGE_NAME" &>/dev/null; then
-    docker build -t "$IMAGE_NAME" "$SCRIPT_DIR"
+    docker build --pull -t "$IMAGE_NAME" "$SCRIPT_DIR"
 fi
 
 mkdir -p "$HOME/.pi"
@@ -21,7 +25,7 @@ while [[ $# -gt 0 ]]; do
     if [[ "$1" == "--config-tmpl" && -n "$2" && -f "$2" ]]; then
         tmpcfg=$(mktemp)
         envsubst < "$2" > "$tmpcfg"
-        docker_extra_args+=" -v $tmpcfg:/.pi/agent/models.json:ro"
+        docker_extra_args+=" -v $tmpcfg:/home/$HOST_USER/.pi/agent/models.json:ro"
         trap cleanup EXIT
         shift 2
         continue
@@ -32,10 +36,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 
-docker run --rm -it \
-    --user "$(id -u):$(id -g)" \
+exec docker run --rm -it \
+    -e "HOST_UID=$HOST_UID" \
+    -e "HOST_GID=$HOST_GID" \
+    -e "HOST_USER=$HOST_USER" \
     -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
-    -v "$HOME/.pi:/.pi" \
+    -v "$HOME/.pi:/home/$HOST_USER/.pi" \
     -v "$WORKDIR:$WORKDIR" \
     -w "$WORKDIR" \
     $docker_extra_args \
