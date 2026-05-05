@@ -12,7 +12,7 @@ fi
 
 # Create a user matching the host UID/GID/name if none exists yet
 if ! getent passwd "$HOST_UID" &>/dev/null; then
-    useradd -u "$HOST_UID" -g "$HOST_GID" -s /bin/bash "$HOST_USER"
+    useradd -u "$HOST_UID" -g "$HOST_GID" -s /bin/bash "$HOST_USER" 2>/dev/null
 fi
 
 # Ensure the user owns their home directory.

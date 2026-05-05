@@ -39,7 +39,7 @@ while true; do
     esac
 done
 
-# Remaining arguments are passed through to pi inside the container
+# remaining arguments are passed through to pi inside the container
 pi_args=("$@")
 
 # check if the image needs to be rebuilt
@@ -56,7 +56,7 @@ if [[ -n "$config_tmpl" ]]; then
     tmpcfg=$(mktemp)
     envsubst < "$config_tmpl" > "$tmpcfg"
 
-    # If a models.json already exists on the host, deep-merge it with the
+    # If a models.json already exists on the host, merge it with the
     # rendered template so that both sets of providers are available inside
     # the container.  Template values take precedence on key conflicts.
     if [[ -f "$HOME/.pi/agent/models.json" ]]; then
@@ -70,7 +70,10 @@ if [[ -n "$config_tmpl" ]]; then
     trap cleanup EXIT
 fi
 
-exec docker run --rm -it \
+# check if we are in a tty
+[[ -t 0 && -t 1 ]] && docker_extra_args+=" -it"
+
+exec docker run --rm \
     -e "HOST_UID=$HOST_UID" \
     -e "HOST_GID=$HOST_GID" \
     -e "HOST_USER=$HOST_USER" \
