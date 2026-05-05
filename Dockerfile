@@ -1,12 +1,15 @@
 FROM ubuntu:resolute
 
 RUN apt-get update && apt-get upgrade -y \
-    && apt-get install -y nodejs npm fd-find ripgrep \
+    && apt-get install -y python-is-python3 nodejs npm fd-find ripgrep jq bc zip unzip vim \
+    && apt-get autoremove -y ssh scp \
     && npm install -g @mariozechner/pi-coding-agent \
     && userdel -r ubuntu \
     && rm -rf /var/lib/apt/lists/*
 
-COPY content/image_AGENT.md /AGENT.md
+ENV EDITOR=vim
+
+COPY content/image_AGENTS.md /AGENTS.md
 COPY content/entrypoint.sh /entrypoint.sh
 
 WORKDIR /
