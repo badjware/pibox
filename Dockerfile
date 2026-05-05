@@ -6,7 +6,8 @@ RUN apt-get update && apt-get upgrade -y \
     && userdel -r ubuntu \
     && rm -rf /var/lib/apt/lists/*
 
-COPY entrypoint.sh /entrypoint.sh
+COPY content/image_AGENT.md /AGENT.md
+COPY content/entrypoint.sh /entrypoint.sh
 
 WORKDIR /
 
