@@ -9,6 +9,7 @@ HOST_GID="${HOST_GID:-$(id -g)}"
 HOST_USER="${HOST_USER:-$(id -un)}"
 
 mkdir -p "$HOME/.pi"
+mkdir -p "$HOME/.claude"
 
 docker_extra_args=""
 tmpcfg=""
@@ -79,6 +80,7 @@ exec docker run --rm \
     -e "HOST_USER=$HOST_USER" \
     -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
     -v "$HOME/.pi:/home/$HOST_USER/.pi" \
+    -v "$HOME/.pi:/home/$HOST_USER/.claude:ro" \
     -v "$WORKDIR:$WORKDIR" \
     -w "$WORKDIR" \
     $docker_extra_args \
