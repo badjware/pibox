@@ -60,8 +60,6 @@ start_rootless_docker() {
             --copy-up=/run \
         dockerd \
             --host="unix://$sock" \
-            --iptables=false \
-            --ip6tables=false \
             --storage-driver=fuse-overlayfs \
         </dev/null >>"$log" 2>&1 &
     local pid=$!
