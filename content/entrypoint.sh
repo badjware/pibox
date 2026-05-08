@@ -13,9 +13,16 @@ ENABLE_DOCKER="${ENABLE_DOCKER:-0}"
 getent group  "$HOST_GID" >/dev/null || groupadd -g "$HOST_GID" "$HOST_USER"
 getent passwd "$HOST_UID" >/dev/null || useradd  -u "$HOST_UID" -g "$HOST_GID" -s /bin/bash "$HOST_USER" 2>/dev/null
 
-# Docker may have pre-created HOME (root-owned) when setting up the bind mount.
+# Docker may have pre-created HOME and bind-mount ancestor directories (root-owned)
+# when setting up bind mounts. Fix ownership on HOME itself and any root-owned
+# stub directories directly beneath it (.local, .local/share, etc.).
 USER_HOME=$(getent passwd "$HOST_UID" | cut -d: -f6)
 chown "$HOST_UID:$HOST_GID" "$USER_HOME"
+for stub in "$USER_HOME/.local" "$USER_HOME/.local/share"; do
+    if [[ -d "$stub" ]] && [[ "$(stat -c '%u' "$stub")" == "0" ]]; then
+        chown "$HOST_UID:$HOST_GID" "$stub"
+    fi
+done
 
 # ---------------------------------------------------------------------------
 # Optional: rootless Docker-in-Docker
