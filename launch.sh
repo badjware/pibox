@@ -74,13 +74,13 @@ fi
 # check if we are in a tty
 [[ -t 0 && -t 1 ]] && docker_extra_args+=" -it"
 
-exec docker run --rm \
+exec docker run --rm --net host \
     -e "HOST_UID=$HOST_UID" \
     -e "HOST_GID=$HOST_GID" \
     -e "HOST_USER=$HOST_USER" \
     -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
     -v "$HOME/.pi:/home/$HOST_USER/.pi" \
-    -v "$HOME/.pi:/home/$HOST_USER/.claude:ro" \
+    -v "$HOME/.claude:/home/$HOST_USER/.claude:ro" \
     -v "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro" \
     -v "$WORKDIR:$WORKDIR" \
     -w "$WORKDIR" \
