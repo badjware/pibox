@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 IMAGE_NAME="pi"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -81,6 +81,7 @@ exec docker run --rm \
     -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
     -v "$HOME/.pi:/home/$HOST_USER/.pi" \
     -v "$HOME/.pi:/home/$HOST_USER/.claude:ro" \
+    -v "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro" \
     -v "$WORKDIR:$WORKDIR" \
     -w "$WORKDIR" \
     $docker_extra_args \

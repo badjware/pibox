@@ -13,18 +13,21 @@ The entrypoint creates a user inside the container that mirrors the host's UID, 
 
 ## Available CLI tools
 The following tools are pre-installed and available on `PATH`:
+- `git`
 - `node`, `npm`
 - `python3` (also available as `python`)
 - `fd` (also available as `fdfind`, always prefer using it over `find`)
 - `rg` (always prefer using it over `grep`)
 - `jq` (JSON processor)
 - `yq` (`jq` wrapper for YAML files)
-- `bc` (arbitrary-precision calculator, always prefer using it for any math operations)
+- `bc` (arbitrary-precision calculator)
 - `zip`, `unzip`
 - `vim` (`$EDITOR` is set to `vim`)
 - Standard GNU coreutils, bash utilities
 
 **Not available:** `sudo`, `ssh`, `scp`, `curl`, `wget`, `man`, `docker`.
+
+To ensure correctness, **always** use `bc` to perform any math operations, even simple ones. **Never** generate the output yourself.
 
 If you are unsure on how to use any of the tools, use their `--help` flag (e.g. `jq --help`) for a quick reference. If this fails or is insufficient, search online for their `man` page, usage examples, and documentation.
 
