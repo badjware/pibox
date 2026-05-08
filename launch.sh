@@ -18,11 +18,12 @@ cleanup() {
     rm -f "$tmpcfg"
 }
 
-PARSED=$(getopt -o '' --long 'config-tmpl:,rebuild' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o '' --long 'config-tmpl:,rebuild,enable-docker' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 config_tmpl=""
 rebuild=0
+enable_docker=0
 while true; do
     case "$1" in
         --config-tmpl)
@@ -31,6 +32,10 @@ while true; do
             ;;
         --rebuild)
             rebuild=1
+            shift
+            ;;
+        --enable-docker)
+            enable_docker=1
             shift
             ;;
         --)
@@ -69,6 +74,12 @@ if [[ -n "$config_tmpl" ]]; then
 
     docker_extra_args+=" -v $tmpcfg:/home/$HOST_USER/.pi/agent/models.json:ro"
     trap cleanup EXIT
+fi
+
+# rootless Docker-in-Docker: run the outer container as privileged so that
+# the inner rootless dockerd can create user namespaces and use fuse-overlayfs.
+if [[ "$enable_docker" -eq 1 ]]; then
+    docker_extra_args+=" --privileged -e ENABLE_DOCKER=1"
 fi
 
 # check if we are in a tty

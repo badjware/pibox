@@ -26,7 +26,7 @@ The following tools are pre-installed and available on `PATH`:
 - `vim` (`$EDITOR` is set to `vim`)
 - Standard GNU coreutils, bash utilities
 
-Not available: `sudo`, `ssh`, `scp`, `curl`, `wget`, `man`, `docker`.
+Not available: `sudo`, `ssh`, `scp`, `curl`, `wget`, `man`.
 
 To ensure correctness, **always** use `bc` to perform any math operations, even simple ones. **Never** generate the output yourself.
 
