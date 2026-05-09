@@ -3,7 +3,7 @@ FROM ubuntu:resolute
 RUN sed -i 's:^path-exclude=/usr/share/man:#path-exclude=/usr/share/man:' /etc/dpkg/dpkg.cfg.d/excludes \
     && apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends tini python-is-python3 nodejs npm golang fd-find ripgrep jq yq bc zip unzip git vim \
-        docker.io docker-compose-v2 uidmap fuse-overlayfs rootlesskit slirp4netns \
+        docker.io docker-compose-v2 uidmap fuse-overlayfs rootlesskit slirp4netns iproute2 \
         man-db manpages \
     && apt-get remove -y sudo openssh-client curl wget \
     && apt-get autoremove -y \

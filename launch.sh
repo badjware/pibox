@@ -85,7 +85,7 @@ fi
 # check if we are in a tty
 [[ -t 0 && -t 1 ]] && docker_extra_args+=" -it"
 
-exec docker run --rm --net host \
+exec docker run --rm \
     -e "HOST_UID=$HOST_UID" \
     -e "HOST_GID=$HOST_GID" \
     -e "HOST_USER=$HOST_USER" \
