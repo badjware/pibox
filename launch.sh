@@ -11,7 +11,7 @@ HOST_USER="${HOST_USER:-$(id -un)}"
 mkdir -p "$HOME/.pi"
 mkdir -p "$HOME/.claude"
 
-docker_extra_args=""
+docker_extra_args=()
 tmpcfg=""
 pi_args=()
 cleanup() {
@@ -72,18 +72,34 @@ if [[ -n "$config_tmpl" ]]; then
         tmpcfg="$merged"
     fi
 
-    docker_extra_args+=" -v $tmpcfg:/home/$HOST_USER/.pi/agent/models.json:ro"
+    docker_extra_args+=("-v" "$tmpcfg:/home/$HOST_USER/.pi/agent/models.json:ro")
     trap cleanup EXIT
 fi
 
 # rootless Docker-in-Docker: run the outer container as privileged so that
 # the inner rootless dockerd can create user namespaces and use fuse-overlayfs.
 if [[ "$enable_docker" -eq 1 ]]; then
-    docker_extra_args+=" --privileged -e ENABLE_DOCKER=1"
+    docker_extra_args+=(
+        "--privileged"
+        "-e" "ENABLE_DOCKER=1"
+    )
+else
+    # Drop all caps and re-add only what the entrypoint needs.
+    # Also block setuid/setgid binaries from gaining new privileges.
+    docker_extra_args+=(
+        "--security-opt=no-new-privileges:true"
+        "--cap-drop=ALL"
+        "--cap-add=CHOWN"
+        "--cap-add=DAC_OVERRIDE"
+        "--cap-add=FOWNER"
+        "--cap-add=SETUID"
+        "--cap-add=SETGID"
+        "--cap-add=KILL"
+    )
 fi
 
 # check if we are in a tty
-[[ -t 0 && -t 1 ]] && docker_extra_args+=" -it"
+[[ -t 0 && -t 1 ]] && docker_extra_args+=("-it")
 
 exec docker run --rm \
     -e "HOST_UID=$HOST_UID" \
@@ -95,5 +111,7 @@ exec docker run --rm \
     -v "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro" \
     -v "$WORKDIR:$WORKDIR" \
     -w "$WORKDIR" \
-    $docker_extra_args \
+    --ipc=none \
+    --pids-limit=512 \
+    "${docker_extra_args[@]}" \
     "$IMAGE_NAME" "${pi_args[@]}"
