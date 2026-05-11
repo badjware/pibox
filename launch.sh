@@ -21,7 +21,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o '' --long 'config-tmpl:,build,pull,unsafe-enable-docker,ephemeral,tmp' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o '' --long 'config-tmpl:,build,pull,unsafe-enable-docker,ephemeral,tmp,read-only' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 config_tmpl=""
@@ -29,6 +29,7 @@ build=0
 pull=0
 enable_docker=0
 ephemeral=0
+read_only=""
 while true; do
     case "$1" in
         --config-tmpl)
@@ -49,6 +50,10 @@ while true; do
             ;;
         --ephemeral|--tmp)
             ephemeral=1
+            shift
+            ;;
+        --read-only)
+            read_only=1
             shift
             ;;
         --)
@@ -133,10 +138,10 @@ exec docker run --rm \
     -e "HOST_GID=$HOST_GID" \
     -e "HOST_USER=$HOST_USER" \
     -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
-    -v "$HOME/.pi:/home/$HOST_USER/.pi" \
+    -v "$HOME/.pi:/home/$HOST_USER/.pi${read_only:+:ro}" \
     -v "$HOME/.claude:/home/$HOST_USER/.claude:ro" \
     -v "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro" \
-    -v "$WORKDIR:$WORKDIR" \
+    -v "$WORKDIR:$WORKDIR${read_only:+:ro}" \
     -w "$WORKDIR" \
     --ipc=none \
     --pids-limit=512 \
