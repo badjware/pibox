@@ -39,7 +39,7 @@ alias pibox='/path/to/pibox/launch.sh'
 ## Usage
 
 ```
-./launch.sh [--build] [--pull] [--enable-docker] [--config-tmpl PATH] [-- <pi args>]
+./launch.sh [--build] [--pull] [--enable-docker] [--config-tmpl PATH] [--ephemeral|--tmp] [-- <pi args>]
 ```
 
 ### Flags
@@ -50,6 +50,7 @@ alias pibox='/path/to/pibox/launch.sh'
 | `--pull` | Update the image prior to launching. |
 | `--enable-docker` | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers. |
 | `--config-tmpl PATH` | Render a `models.json` template through `envsubst` and mount it into `~/.pi/agent/models.json` inside the container. Merged with any existing host-side `models.json` via `jq` (template values take precedence). |
+| `--ephemeral`, `--tmp` | Start in a temporary working directory instead of the current one, and disable pi session persistence (`--no-session`). The tmp directory is removed when the container exits. |
 
 Any arguments after `--` are passed through to `pi` inside the container.
 

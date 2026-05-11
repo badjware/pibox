@@ -14,18 +14,21 @@ mkdir -p "$HOME/.claude"
 
 docker_extra_args=()
 tmpcfg=""
+tmpworkdir=""
 pi_args=()
 cleanup() {
     rm -f "$tmpcfg"
+    [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o '' --long 'config-tmpl:,build,pull,enable-docker' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o '' --long 'config-tmpl:,build,pull,enable-docker,ephemeral,tmp' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 config_tmpl=""
 build=0
 pull=0
 enable_docker=0
+ephemeral=0
 while true; do
     case "$1" in
         --config-tmpl)
@@ -44,6 +47,10 @@ while true; do
             enable_docker=1
             shift
             ;;
+        --ephemeral|--tmp)
+            ephemeral=1
+            shift
+            ;;
         --)
             shift
             break
@@ -53,6 +60,14 @@ done
 
 # remaining arguments are passed through to pi inside the container
 pi_args=("$@")
+
+# ephemeral mode: use a tmp workdir and don't save the pi session
+if [[ "$ephemeral" -eq 1 ]]; then
+    tmpworkdir=$(mktemp -d)
+    WORKDIR="$tmpworkdir"
+    pi_args=("--no-session" "${pi_args[@]}")
+    trap cleanup EXIT
+fi
 
 # determine which image to use
 if [[ "$build" -eq 1 ]]; then
