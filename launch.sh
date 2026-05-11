@@ -1,6 +1,7 @@
 #!/bin/bash -e
 
-IMAGE_NAME="pi"
+REMOTE_IMAGE="ghcr.io/badjware/pibox:latest"
+LOCAL_IMAGE="pi"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 WORKDIR="$(pwd -P)"
 
@@ -18,11 +19,12 @@ cleanup() {
     rm -f "$tmpcfg"
 }
 
-PARSED=$(getopt -o '' --long 'config-tmpl:,rebuild,enable-docker' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o '' --long 'config-tmpl:,build,pull,enable-docker' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 config_tmpl=""
-rebuild=0
+build=0
+pull=0
 enable_docker=0
 while true; do
     case "$1" in
@@ -30,8 +32,12 @@ while true; do
             config_tmpl="$2"
             shift 2
             ;;
-        --rebuild)
-            rebuild=1
+        --build)
+            build=1
+            shift
+            ;;
+        --pull)
+            pull=1
             shift
             ;;
         --enable-docker)
@@ -48,9 +54,15 @@ done
 # remaining arguments are passed through to pi inside the container
 pi_args=("$@")
 
-# check if the image needs to be rebuilt
-if [[ "$rebuild" -eq 1 ]] || ! docker image inspect "$IMAGE_NAME" &>/dev/null; then
+# determine which image to use
+if [[ "$build" -eq 1 ]]; then
+    IMAGE_NAME="$LOCAL_IMAGE"
     docker build --pull -t "$IMAGE_NAME" "$SCRIPT_DIR"
+else
+    IMAGE_NAME="$REMOTE_IMAGE"
+    if [[ "$pull" -eq 1 ]]; then
+        docker pull "$IMAGE_NAME"
+    fi
 fi
 
 if [[ -n "$config_tmpl" ]]; then
