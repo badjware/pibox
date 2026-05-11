@@ -9,7 +9,7 @@ Pibox wraps `pi` inside an Ubuntu-based Docker image so the agent executes again
 - **Sandboxed execution**: `pi` runs inside a container with an ephemeral filesystem.
 - **Host-user mirroring**: files written from inside the container are owned by your host user.
 - **Persistent config**: `~/.pi` is bind-mounted so settings survive between runs.
-- **Optional rootless Docker-in-Docker**: opt in with `--enable-docker` when the agent needs to run containers itself.
+- **Optional rootless Docker-in-Docker**: opt in with `--unsafe-enable-docker` when the agent needs to run containers itself.
 - **Config templating**: render a `models.json` from a template with environment variables injected at launch time.
 - **Pre-built image**: distributed via GitHub Container Registry.
 
@@ -39,7 +39,7 @@ alias pibox='/path/to/pibox/launch.sh'
 ## Usage
 
 ```
-./launch.sh [--build] [--pull] [--enable-docker] [--config-tmpl PATH] [--ephemeral|--tmp] [-- <pi args>]
+./launch.sh [--build] [--pull] [--unsafe-enable-docker] [--config-tmpl PATH] [--ephemeral|--tmp] [-- <pi args>]
 ```
 
 ### Flags
@@ -48,7 +48,7 @@ alias pibox='/path/to/pibox/launch.sh'
 |---|---|
 | `--build` | Build the image locally from the `Dockerfile` instead of using the published image. |
 | `--pull` | Update the image prior to launching. |
-| `--enable-docker` | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers. |
+| `--unsafe-enable-docker` | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers. |
 | `--config-tmpl PATH` | Render a `models.json` template through `envsubst` and mount it into `~/.pi/agent/models.json` inside the container. Merged with any existing host-side `models.json` via `jq` (template values take precedence). |
 | `--ephemeral`, `--tmp` | Start in a temporary working directory instead of the current one, and disable pi session persistence (`--no-session`). The tmp directory is removed when the container exits. |
 
@@ -73,7 +73,7 @@ Rebuild the image locally (useful when iterating on the `Dockerfile`):
 
 Enable Docker-in-Docker:
 ```sh
-./launch.sh --enable-docker
+./launch.sh --unsafe-enable-docker
 ```
 
 Pass arguments through to `pi` (everything after `--` is forwarded):

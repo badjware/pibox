@@ -21,7 +21,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o '' --long 'config-tmpl:,build,pull,enable-docker,ephemeral,tmp' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o '' --long 'config-tmpl:,build,pull,unsafe-enable-docker,ephemeral,tmp' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 config_tmpl=""
@@ -43,7 +43,7 @@ while true; do
             pull=1
             shift
             ;;
-        --enable-docker)
+        --unsafe-enable-docker)
             enable_docker=1
             shift
             ;;
