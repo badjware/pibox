@@ -13,11 +13,15 @@ env:
 
 jobs:
   build-and-push:
-    name: Build and Push
+    name: Build and Push (${{ matrix.harness }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+
+    strategy:
+      matrix:
+        harness: [pi, claude]
 
     steps:
       - name: Checkout repository
@@ -39,17 +43,30 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ matrix.harness }}
+            type=semver,pattern={{version}}-${{ matrix.harness }}
+            type=semver,pattern={{major}}.{{minor}}-${{ matrix.harness }}
+            type=raw,value=latest,enable=${{ matrix.harness == 'pi' && github.ref_name == github.event.repository.default_branch }}
 
-      - name: Build and push Docker image
+      - name: Build base image
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: Dockerfile.base
+          push: false
+          load: true
+          tags: pibox:base
+          cache-from: type=gha,scope=base
+          cache-to: type=gha,mode=max,scope=base
+
+      - name: Build and push harness image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.${{ matrix.harness }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          build-args: BASE_IMAGE=pibox:base
+          cache-from: type=gha,scope=${{ matrix.harness }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.harness }}

@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
-REMOTE_IMAGE="ghcr.io/badjware/pibox:latest"
-LOCAL_IMAGE="pi"
+REMOTE_IMAGE=""
+LOCAL_IMAGE=""
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 WORKDIR="$(pwd -P)"
 
@@ -21,7 +21,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o '' --long 'config-tmpl:,build,pull,unsafe-enable-docker,ephemeral,tmp,read-only' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o '' --long 'config-tmpl:,build,pull,unsafe-enable-docker,ephemeral,tmp,read-only,harness:' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 config_tmpl=""
@@ -30,6 +30,7 @@ pull=0
 enable_docker=0
 ephemeral=0
 read_only=""
+harness="pi"
 while true; do
     case "$1" in
         --config-tmpl)
@@ -56,6 +57,10 @@ while true; do
             read_only=1
             shift
             ;;
+        --harness)
+            harness="$2"
+            shift 2
+            ;;
         --)
             shift
             break
@@ -74,10 +79,20 @@ if [[ "$ephemeral" -eq 1 ]]; then
     trap cleanup EXIT
 fi
 
+# resolve image names from harness
+case "$harness" in
+    pi)     REMOTE_IMAGE="ghcr.io/badjware/pibox:pi"
+            LOCAL_IMAGE="pibox:pi" ;;
+    claude) REMOTE_IMAGE="ghcr.io/badjware/pibox:claude"
+            LOCAL_IMAGE="pibox:claude" ;;
+    *)      echo "$0: unknown --harness value: $harness" >&2; exit 2 ;;
+esac
+
 # determine which image to use
 if [[ "$build" -eq 1 ]]; then
     IMAGE_NAME="$LOCAL_IMAGE"
-    docker build --pull -t "$IMAGE_NAME" "$SCRIPT_DIR"
+    docker build --pull -t pibox:base -f "$SCRIPT_DIR/Dockerfile.base" "$SCRIPT_DIR"
+    docker build -t "$IMAGE_NAME" -f "$SCRIPT_DIR/Dockerfile.$harness" --build-arg BASE_IMAGE=pibox:base "$SCRIPT_DIR"
 else
     IMAGE_NAME="$REMOTE_IMAGE"
     if [[ "$pull" -eq 1 ]]; then

@@ -12,9 +12,6 @@ RUN sed -i 's:^path-exclude=/usr/share/man:#path-exclude=/usr/share/man:' /etc/d
     && userdel -r ubuntu \
     && rm -rf /var/lib/apt/lists/*
 
-ARG PI_CODING_AGENT_VERSION=0.73.1
-RUN npm install -g @mariozechner/pi-coding-agent@${PI_CODING_AGENT_VERSION}
-
 ENV EDITOR=vim
 
 COPY content/image_AGENTS.md /AGENTS.md
