@@ -15,9 +15,9 @@ A [pi](https://github.com/mariozechner/pi-coding-agent) extension that makes Cla
 
 ## Provider config templating
 
-At startup the extension reads `models.json.tmpl` (bundled alongside `index.ts`), substitutes `${VAR}` placeholders with `process.env`, and registers each provider via `pi.registerProvider()`. pi awaits the async factory before showing the first prompt, so the models are available immediately.
+At startup the extension reads `models.json.tmpl` (bundled alongside `index.ts`), substitutes `${VAR}` placeholders with `process.env`, and registers each provider via `pi.registerProvider()`. For each resolved model ID, specs (`cost`, `contextWindow`, `maxTokens`, `reasoning`, `input`) are looked up from pi's built-in Anthropic model registry and merged in; unknown models fall back to safe defaults. pi awaits the async factory before showing the first prompt, so the models are available immediately.
 
-Registration is silently skipped when required variables are absent: if `baseUrl` is empty the whole provider is dropped; if a model's `id` is empty that model is dropped. The extension is therefore safe to load when not using the Databricks proxy.
+Registration is silently skipped when required variables are absent: if `baseUrl` is empty the whole provider is dropped; if a model's `id` env var is unset that model is dropped. The extension is therefore safe to load when not using the Databricks proxy.
 
 To customise the provider config, edit `models.json.tmpl` (it lives next to `index.ts`).
 

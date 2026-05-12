@@ -4,7 +4,8 @@
  * Bridges Claude Code assets to pi so they interoperate automatically:
  *
  *  - Provider config (models.json.tmpl bundled with this extension)
- *      → rendered with process.env substitution and registered via pi.registerProvider()
+ *      → rendered with process.env substitution; specs (cost, contextWindow, maxTokens,
+ *        reasoning, input) looked up from pi's built-in Anthropic model registry
  *      → only active when the required env vars (ANTHROPIC_BASE_URL, model IDs) are set
  *
  *  - Slash commands (.claude/commands/**\/*.md, ~/.claude/commands/**\/*.md)
@@ -23,6 +24,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { getModel, getModels } from "@mariozechner/pi-ai";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -54,8 +56,10 @@ function findMarkdownFiles(dir: string, rel = ""): string[] {
 
 export default async function claudeInteropExtension(pi: ExtensionAPI) {
 	// ---------------------------------------------------------------------------
-	// Provider config — render bundled models.json.tmpl with process.env and
-	// register each provider via pi.registerProvider().  Skipped when the
+	// Provider config — render bundled models.json.tmpl with process.env, then
+	// enrich each resolved model with specs from pi's built-in Anthropic model
+	// registry (cost, contextWindow, maxTokens, reasoning, input).  Falls back to
+	// safe defaults for model IDs not yet in the registry.  Skipped when the
 	// required env vars are absent (e.g. direct Anthropic API usage).
 	// ---------------------------------------------------------------------------
 	const tmplPath = path.join(__dirname, "models.json.tmpl");
@@ -72,17 +76,31 @@ export default async function claudeInteropExtension(pi: ExtensionAPI) {
 			if (resolvedModels.length === 0) continue;
 			pi.registerProvider(name, {
 				...rest,
-				models: resolvedModels.map((m: any) => ({
-					// Defaults for fields the template omits; explicit values take precedence
-					name: m.id,
-					input: ["text", "image"] as ("text" | "image")[],
-					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-					contextWindow: 200000,
-					maxTokens: 16384,
-					...m,
-					// Merge provider-level compat into each model; model-level takes precedence
-					compat: { ...providerCompat, ...m.compat },
-				})),
+				models: resolvedModels.map((m: any) => {
+					// Exact match first; fall back to the registry model whose canonical ID
+					// appears as a substring of the Databricks alias (e.g.
+					// "databricks-claude-sonnet-4-6" → "claude-sonnet-4-6"), preferring
+					// the longest matching canonical ID.
+					const known =
+						getModel("anthropic", m.id) ??
+						getModels("anthropic")
+							.filter((r) => m.id.includes(r.id))
+							.sort((a, b) => b.id.length - a.id.length)[0];
+					return {
+						// Fill in full specs from pi's registry; fall back to safe defaults
+						// Strip " (latest)" suffix — only meaningful inside pi's own registry.
+						name: (known?.name ?? m.id).replace(/ \(latest\)$/i, ""),
+						reasoning: known?.reasoning ?? true,
+						input: (known?.input ?? ["text", "image"]) as ("text" | "image")[],
+						cost: known?.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+						contextWindow: known?.contextWindow ?? 200000,
+						maxTokens: known?.maxTokens ?? 64000,
+						// Template fields take precedence (id, reasoning overrides, etc.)
+						...m,
+						// Merge provider-level compat → registry compat → model-level compat
+						compat: { ...providerCompat, ...(known as any)?.compat, ...m.compat },
+					};
+				}),
 			});
 		}
 	}
