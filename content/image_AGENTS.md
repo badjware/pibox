@@ -29,6 +29,16 @@ Not available: `sudo`, `ssh`, `scp`, `curl`, `wget`, `grep`, `find`.
 
 To ensure correctness, **always** use `bc` to perform any math operations, even simple ones. **Never** generate the output yourself. In addition, **always** use `jq` to parse and manipulate JSON data and **always** use `yq` to parse and manipulate YAML data. Avoid parsing and editing these formats using regular expressions or string manipulation.
 
-If you are unsure on how to use any of the tools, use `man <tool>` to read its manual, or use its `--help` flag (e.g. `jq --help`) for a quick reference. Only search online if neither of those provides sufficient information.
+If you are unsure on how to use a command-line tool, use `man <tool>` to read its manual, or use its `--help` flag (e.g. `jq --help`) for a quick reference. Only search online if neither of those provides sufficient information.
 
 If you require additional tools, **stop** and ask the user to install them for you. **Never** attempt to install packages yourself.
+
+## Style
+
+**Never** use em-dashes (—). Instead, prefer rephrasing the sentence to avoid the need for them.
+
+Use emojies in moderation. Prefer not using them over using them too much.
+
+When writing text destined to a human reader (eg: commit messages, code comments, README files), avoid being overly specific and overusing remarks. For example, instead of writing "this package requires python (tested on version 3.10)", write "this package requires python". This reduces the cognitive load of the reader and prevents fatigue.
+
+There is an exception to the above rule. This style of writing is perfectly fine for text destined to an agent (eg: SKILL.md, AGENTS.md, etc.). In addition, prioritize information density over readability when writing for an agent. For example, instead of  "this package requires python (tested on version 3.10)", write "package requires python (tested on 3.10)". This is to improve token efficiency.
