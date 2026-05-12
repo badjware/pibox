@@ -7,7 +7,8 @@ The container is ephemeral; nothing written outside of bind-mounted paths will s
 ## Filesystem mounts
 The following directories are mounted in read-write mode:
 - **Working directory** — the host directory from which docker was ran is bind-mounted at the same absolute path inside the container, and set as the working directory.
-- **`~/.pi`** — the host user's `~/.pi` directory is bind-mounted to the same path inside the container. This is where pi's configuration is persisted across runs.
+- **`~/.pi`** — the host user's `~/.pi` directory is bind-mounted to the same path inside the container. This is where the pi agent's configuration is persisted across runs.
+- **`~/.claude`** — the host user's `~/.claude` directory is bind-mounted to the same path inside the container. This is where the Claude Code agent's configuration and session data is persisted across runs.
 
 ## User & permissions
 You are running as a user that mirrors the host's UID, GID, and username. File ownership is therefore consistent between host and container. You do not have root access. **Never attempt to switch user or execute a command as a different user** (eg: executing `sudo su`).
