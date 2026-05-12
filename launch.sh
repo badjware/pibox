@@ -152,14 +152,6 @@ else
     )
 fi
 
-# ~/.claude mount: rw always; in ephemeral+claude mode use a tmpfs instead so
-# session state is not written back to the host.
-if [[ "$ephemeral" -eq 1 && "$harness" == "claude" ]]; then
-    docker_extra_args+=("--mount" "type=tmpfs,destination=/home/$HOST_USER/.claude")
-else
-    docker_extra_args+=("-v" "$HOME/.claude:/home/$HOST_USER/.claude")
-fi
-
 # check if we are in a tty
 [[ -t 0 && -t 1 ]] && docker_extra_args+=("-it")
 
@@ -168,12 +160,18 @@ exec docker run --rm \
     -e "HOST_GID=$HOST_GID" \
     -e "HOST_USER=$HOST_USER" \
     -e "HARNESS=$harness" \
-    -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
-    -e "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}" \
-    -e "CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}" \
+    \
     -e "ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}" \
-    -e "ANTHROPIC_MODEL=${ANTHROPIC_MODEL}" \
+    -e "ANTHROPIC_DEFAULT_OPUS_MODEL=${ANTHROPIC_DEFAULT_OPUS_MODEL}" \
+    -e "ANTHROPIC_DEFAULT_SONNET_MODEL=${ANTHROPIC_DEFAULT_SONNET_MODEL}" \
+    -e "ANTHROPIC_DEFAULT_HAIKU_MODEL=${ANTHROPIC_DEFAULT_HAIKU_MODEL}" \
+    -e "ANTHROPIC_CUSTOM_HEADERS=${ANTHROPIC_CUSTOM_HEADERS}" \
+    -e "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=${CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS}" \
+    -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
+    \
     -v "$HOME/.pi:/home/$HOST_USER/.pi${read_only:+:ro}" \
+    -v "$HOME/.claude:/home/$HOST_USER/.claude${read_only:+:ro}" \
+    -v "$HOME/.claude.json:/home/$HOST_USER/.claude.json${read_only:+:ro}" \
     -v "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro" \
     -v "$WORKDIR:$WORKDIR${read_only:+:ro}" \
     -w "$WORKDIR" \
