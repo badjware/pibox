@@ -1,6 +1,6 @@
 ARG BASE_IMAGE=pibox:base
 FROM ${BASE_IMAGE}
 
-ARG PI_CODING_AGENT_VERSION=0.73.1
+ARG PI_CODING_AGENT_VERSION=0.74.0
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
-    npm install -g @mariozechner/pi-coding-agent@${PI_CODING_AGENT_VERSION}
+    npm install -g @earendil-works/pi-coding-agent@${PI_CODING_AGENT_VERSION}

@@ -9,10 +9,10 @@ created inside the container keep consistent ownership on the host.
 
 Two harnesses are supported:
 
-| Harness | Agent | Image |
-|---|---|---|
-| `pi` (default) | [pi](https://github.com/badlogic/pi) | `ghcr.io/badjware/pibox:pi` |
-| `claude` | [Claude Code](https://github.com/anthropics/claude-code) | `ghcr.io/badjware/pibox:claude` |
+| Harness        | Agent                                                    | Image                           |
+| -------------- | -------------------------------------------------------- | ------------------------------- |
+| `pi` (default) | [pi](https://github.com/badlogic/pi)                     | `ghcr.io/badjware/pibox:pi`     |
+| `claude`       | [Claude Code](https://github.com/anthropics/claude-code) | `ghcr.io/badjware/pibox:claude` |
 
 ## Features
 
@@ -49,18 +49,19 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 ## Usage
 
 ```
-./launch.sh [--harness pi|claude] [--build] [--pull] [--unsafe-enable-docker] [--ephemeral|--tmp] [-- <agent args>]
+./launch.sh [--harness pi|claude] [--build] [--pull] [--unsafe-enable-docker] [--ephemeral|--tmp] [--read-only] [-- <agent args>]
 ```
 
 ### Flags
 
-| Flag | Description |
-|---|---|
-| `--harness pi\|claude` | Choose the agent to run. Defaults to `pi`. |
-| `--build` | Build the image locally from the Dockerfiles instead of using the published image. |
-| `--pull` | Update the image prior to launching. |
-| `--unsafe-enable-docker` | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers. |
-| `--ephemeral`, `--tmp` | Start in a temporary working directory instead of the current one. For pi, also disables session persistence (`--no-session`). For claude, mounts a tmpfs over `~/.claude` so session state is not written back to the host. The tmp directory is removed when the container exits. |
+| Flag                     | Description                                                                                                                                                                                                                                                                         |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--harness pi\|claude`   | Choose the agent to run. Defaults to `pi`.                                                                                                                                                                                                                                          |
+| `--build`                | Build the image locally from the Dockerfiles instead of using the published image.                                                                                                                                                                                                  |
+| `--pull`                 | Update the image prior to launching.                                                                                                                                                                                                                                                |
+| `--unsafe-enable-docker` | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers.                                                                                                                                                                                   |
+| `--ephemeral`, `--tmp`   | Start in a temporary working directory instead of the current one. For pi, also disables session persistence (`--no-session`). For claude, mounts a tmpfs over `~/.claude` so session state is not written back to the host. The tmp directory is removed when the container exits. |
+| `--read-only`            | Mount everything as read-only inside the container.                                                                                                                                                                                                                                 |
 
 Any arguments after `--` are passed through to the agent inside the container.
 
@@ -104,13 +105,15 @@ Enable Docker-in-Docker:
 The following environment variables are read from the host and forwarded into
 the container:
 
-| Variable | Used by |
-|---|---|
-| `ANTHROPIC_AUTH_TOKEN` | pi, claude |
-| `ANTHROPIC_API_KEY` | pi, claude |
-| `CLAUDE_CODE_OAUTH_TOKEN` | claude |
-| `ANTHROPIC_BASE_URL` | pi, claude |
-| `ANTHROPIC_MODEL` | pi, claude |
+| Variable                                 | Used by    |
+| ---------------------------------------- | ---------- |
+| `ANTHROPIC_AUTH_TOKEN`                   | pi, claude |
+| `ANTHROPIC_BASE_URL`                     | pi, claude |
+| `ANTHROPIC_DEFAULT_OPUS_MODEL`           | pi, claude |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL`         | pi, claude |
+| `ANTHROPIC_DEFAULT_HAIKU_MODEL`          | pi, claude |
+| `ANTHROPIC_CUSTOM_HEADERS`               | claude     |
+| `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` | claude     |
 
 ## What's inside the image
 
@@ -123,14 +126,11 @@ The container ships with a minimal set of tools suited to a coding agent:
 
 Tools deliberately **not** installed: `sudo`, `ssh`, `scp`, `curl`, `wget`.
 
-The pi image additionally installs `@mariozechner/pi-coding-agent`.
-The claude image additionally installs `@anthropic-ai/claude-code`.
-
 ## Bind mounts
 
-| Host | Container | Mode |
-|---|---|---|
-| current working directory | same absolute path | rw |
-| `~/.pi` | `~/.pi` | rw |
-| `~/.claude` | `~/.claude` | rw (tmpfs in ephemeral+claude mode) |
-| `~/.gitconfig` | `~/.gitconfig` | ro |
+| Host                      | Container          | Mode |
+| ------------------------- | ------------------ | ---- |
+| current working directory | same absolute path | rw   |
+| `~/.pi`                   | `~/.pi`            | rw   |
+| `~/.claude`               | `~/.claude`        | rw   |
+| `~/.gitconfig`            | `~/.gitconfig`     | ro   |
