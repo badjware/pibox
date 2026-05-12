@@ -71,11 +71,13 @@ done
 # remaining arguments are passed through to pi inside the container
 pi_args=("$@")
 
-# ephemeral mode: use a tmp workdir and don't save the pi session
+# ephemeral mode: use a tmp workdir and don't save the session
 if [[ "$ephemeral" -eq 1 ]]; then
     tmpworkdir=$(mktemp -d)
     WORKDIR="$tmpworkdir"
-    pi_args=("--no-session" "${pi_args[@]}")
+    if [[ "$harness" == "pi" ]]; then
+        pi_args=("--no-session" "${pi_args[@]}")
+    fi
     trap cleanup EXIT
 fi
 
@@ -145,6 +147,14 @@ else
     )
 fi
 
+# ~/.claude mount: rw always; in ephemeral+claude mode use a tmpfs instead so
+# session state is not written back to the host.
+if [[ "$ephemeral" -eq 1 && "$harness" == "claude" ]]; then
+    docker_extra_args+=("--mount" "type=tmpfs,destination=/home/$HOST_USER/.claude")
+else
+    docker_extra_args+=("-v" "$HOME/.claude:/home/$HOST_USER/.claude")
+fi
+
 # check if we are in a tty
 [[ -t 0 && -t 1 ]] && docker_extra_args+=("-it")
 
@@ -152,9 +162,13 @@ exec docker run --rm \
     -e "HOST_UID=$HOST_UID" \
     -e "HOST_GID=$HOST_GID" \
     -e "HOST_USER=$HOST_USER" \
+    -e "HARNESS=$harness" \
     -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
+    -e "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}" \
+    -e "CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}" \
+    -e "ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}" \
+    -e "ANTHROPIC_MODEL=${ANTHROPIC_MODEL}" \
     -v "$HOME/.pi:/home/$HOST_USER/.pi${read_only:+:ro}" \
-    -v "$HOME/.claude:/home/$HOST_USER/.claude:ro" \
     -v "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro" \
     -v "$WORKDIR:$WORKDIR${read_only:+:ro}" \
     -w "$WORKDIR" \

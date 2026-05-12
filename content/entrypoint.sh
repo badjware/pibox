@@ -5,6 +5,7 @@ HOST_UID="${HOST_UID:?HOST_UID environment variable is required}"
 HOST_GID="${HOST_GID:?HOST_GID environment variable is required}"
 HOST_USER="${HOST_USER:?HOST_USER environment variable is required}"
 ENABLE_DOCKER="${ENABLE_DOCKER:-0}"
+HARNESS="${HARNESS:-pi}"
 
 # ---------------------------------------------------------------------------
 # Mirror the host user inside the container so bind-mounted files keep
@@ -18,7 +19,7 @@ getent passwd "$HOST_UID" >/dev/null || useradd  -u "$HOST_UID" -g "$HOST_GID" -
 # stub directories directly beneath it (.local, .local/share, etc.).
 USER_HOME=$(getent passwd "$HOST_UID" | cut -d: -f6)
 chown "$HOST_UID:$HOST_GID" "$USER_HOME"
-for stub in "$USER_HOME/.local" "$USER_HOME/.local/share"; do
+for stub in "$USER_HOME/.local" "$USER_HOME/.local/share" "$USER_HOME/.claude"; do
     if [[ -d "$stub" ]] && [[ "$(stat -c '%u' "$stub")" == "0" ]]; then
         chown "$HOST_UID:$HOST_GID" "$stub"
     fi
@@ -87,5 +88,9 @@ start_rootless_docker() {
 
 [[ "$ENABLE_DOCKER" == "1" ]] && start_rootless_docker
 
-# Drop root privileges and run pi as the host user
-exec runuser -u "$HOST_USER" -- pi "$@"
+# Drop root privileges and run the chosen harness as the host user
+case "$HARNESS" in
+    pi)     exec runuser -u "$HOST_USER" -- pi "$@" ;;
+    claude) exec runuser -u "$HOST_USER" -- claude "$@" ;;
+    *)      echo "entrypoint: unknown HARNESS: $HARNESS" >&2; exit 2 ;;
+esac
