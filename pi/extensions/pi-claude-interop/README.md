@@ -1,16 +1,25 @@
 # pi-claude-interop
 
-A [pi](https://github.com/mariozechner/pi-coding-agent) extension that makes Claude Code assets automatically available inside pi.
+A [pi](https://github.com/mariozechner/pi-coding-agent) extension that makes Claude Code assets automatically available inside pi, and registers a bundled provider config from environment variables.
 
 ## What it bridges
 
-| Claude Code asset | Pi equivalent |
+| Asset | Pi equivalent |
 |---|---|
+| `models.json.tmpl` (bundled) | Provider registered via `pi.registerProvider()` |
 | `~/.claude/commands/**/*.md` | Prompt templates (`/command-name`) |
 | `.claude/commands/**/*.md` | Prompt templates (`/command-name`) |
 | `~/.claude/skills/` | Skill paths (auto-loaded) |
 | `.claude/skills/` | Skill paths (auto-loaded) |
 | `.claude/rules/**/*.md` | Injected into the system prompt |
+
+## Provider config templating
+
+At startup the extension reads `models.json.tmpl` (bundled alongside `index.ts`), substitutes `${VAR}` placeholders with `process.env`, and registers each provider via `pi.registerProvider()`. pi awaits the async factory before showing the first prompt, so the models are available immediately.
+
+Registration is silently skipped when required variables are absent: if `baseUrl` is empty the whole provider is dropped; if a model's `id` is empty that model is dropped. The extension is therefore safe to load when not using the Databricks proxy.
+
+To customise the provider config, edit `models.json.tmpl` (it lives next to `index.ts`).
 
 ## What it does NOT bridge
 

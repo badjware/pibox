@@ -20,13 +20,11 @@ Two harnesses are supported:
 - **Host-user mirroring**: files written from inside the container are owned by your host user.
 - **Persistent config**: `~/.pi` and `~/.claude` are bind-mounted so settings and sessions survive between runs.
 - **Optional rootless Docker-in-Docker**: opt in with `--unsafe-enable-docker` when the agent needs to run containers itself.
-- **Config templating**: render a `models.json` from a template with environment variables injected at launch time (pi harness only).
 - **Pre-built images**: distributed via GitHub Container Registry.
 
 ## Requirements
 
 - Docker
-- `envsubst` (from `gettext`), `jq`
 
 YMMV on WSL.
 
@@ -51,7 +49,7 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 ## Usage
 
 ```
-./launch.sh [--harness pi|claude] [--build] [--pull] [--unsafe-enable-docker] [--config-tmpl PATH] [--ephemeral|--tmp] [-- <agent args>]
+./launch.sh [--harness pi|claude] [--build] [--pull] [--unsafe-enable-docker] [--ephemeral|--tmp] [-- <agent args>]
 ```
 
 ### Flags
@@ -62,7 +60,6 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 | `--build` | Build the image locally from the Dockerfiles instead of using the published image. |
 | `--pull` | Update the image prior to launching. |
 | `--unsafe-enable-docker` | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers. |
-| `--config-tmpl PATH` | (pi only) Render a `models.json` template through `envsubst` and mount it into `~/.pi/agent/models.json` inside the container. Merged with any existing host-side `models.json` via `jq` (template values take precedence). |
 | `--ephemeral`, `--tmp` | Start in a temporary working directory instead of the current one. For pi, also disables session persistence (`--no-session`). For claude, mounts a tmpfs over `~/.claude` so session state is not written back to the host. The tmp directory is removed when the container exits. |
 
 Any arguments after `--` are passed through to the agent inside the container.

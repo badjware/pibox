@@ -13,18 +13,15 @@ mkdir -p "$HOME/.pi"
 mkdir -p "$HOME/.claude"
 
 docker_extra_args=()
-tmpcfg=""
 tmpworkdir=""
 pi_args=()
 cleanup() {
-    rm -f "$tmpcfg"
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o '' --long 'config-tmpl:,build,pull,unsafe-enable-docker,ephemeral,tmp,read-only,harness:' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o '' --long 'build,pull,unsafe-enable-docker,ephemeral,tmp,read-only,harness:' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
-config_tmpl=""
 build=0
 pull=0
 enable_docker=0
@@ -33,10 +30,6 @@ read_only=""
 harness="pi"
 while true; do
     case "$1" in
-        --config-tmpl)
-            config_tmpl="$2"
-            shift 2
-            ;;
         --build)
             build=1
             shift
@@ -105,29 +98,6 @@ else
     if [[ "$pull" -eq 1 ]]; then
         docker pull "$IMAGE_NAME"
     fi
-fi
-
-if [[ -n "$config_tmpl" ]]; then
-    if [[ ! -f "$config_tmpl" ]]; then
-        echo "$0: --config-tmpl: file not found: $config_tmpl" >&2
-        exit 1
-    fi
-
-    tmpcfg=$(mktemp)
-    envsubst < "$config_tmpl" > "$tmpcfg"
-
-    # If a models.json already exists on the host, merge it with the
-    # rendered template so that both sets of providers are available inside
-    # the container.  Template values take precedence on key conflicts.
-    if [[ -f "$HOME/.pi/agent/models.json" ]]; then
-        merged=$(mktemp)
-        jq -s '.[0] * .[1]' "$HOME/.pi/agent/models.json" "$tmpcfg" > "$merged"
-        rm "$tmpcfg"
-        tmpcfg="$merged"
-    fi
-
-    docker_extra_args+=("-v" "$tmpcfg:/home/$HOST_USER/.pi/agent/models.json:ro")
-    trap cleanup EXIT
 fi
 
 # rootless Docker-in-Docker: run the outer container as privileged so that

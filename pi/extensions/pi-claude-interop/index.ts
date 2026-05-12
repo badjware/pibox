@@ -3,6 +3,10 @@
  *
  * Bridges Claude Code assets to pi so they interoperate automatically:
  *
+ *  - Provider config (models.json.tmpl bundled with this extension)
+ *      → rendered with process.env substitution and registered via pi.registerProvider()
+ *      → only active when the required env vars (ANTHROPIC_BASE_URL, model IDs) are set
+ *
  *  - Slash commands (.claude/commands/**\/*.md, ~/.claude/commands/**\/*.md)
  *      → registered as pi prompt templates (syntax is identical: $ARGUMENTS, $1, etc.)
  *
@@ -48,7 +52,41 @@ function findMarkdownFiles(dir: string, rel = ""): string[] {
 // Extension
 // ---------------------------------------------------------------------------
 
-export default function claudeInteropExtension(pi: ExtensionAPI) {
+export default async function claudeInteropExtension(pi: ExtensionAPI) {
+	// ---------------------------------------------------------------------------
+	// Provider config — render bundled models.json.tmpl with process.env and
+	// register each provider via pi.registerProvider().  Skipped when the
+	// required env vars are absent (e.g. direct Anthropic API usage).
+	// ---------------------------------------------------------------------------
+	const tmplPath = path.join(__dirname, "models.json.tmpl");
+	if (fs.existsSync(tmplPath)) {
+		const raw = fs.readFileSync(tmplPath, "utf8");
+		const rendered = raw.replace(/\$\{([^}]+)\}/g, (_, k) => process.env[k] ?? "");
+		const config = JSON.parse(rendered) as { providers?: Record<string, any> };
+		for (const [name, providerCfg] of Object.entries(config.providers ?? {})) {
+			const { compat: providerCompat, models, ...rest } = providerCfg;
+			// Skip entirely if the base URL wasn't resolved
+			if (!rest.baseUrl) continue;
+			// Filter out models whose ID wasn't resolved (env var not set)
+			const resolvedModels = (models ?? []).filter((m: any) => m.id);
+			if (resolvedModels.length === 0) continue;
+			pi.registerProvider(name, {
+				...rest,
+				models: resolvedModels.map((m: any) => ({
+					// Defaults for fields the template omits; explicit values take precedence
+					name: m.id,
+					input: ["text", "image"] as ("text" | "image")[],
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+					contextWindow: 200000,
+					maxTokens: 16384,
+					...m,
+					// Merge provider-level compat into each model; model-level takes precedence
+					compat: { ...providerCompat, ...m.compat },
+				})),
+			});
+		}
+	}
+
 	const home = os.homedir();
 	let cwd = process.cwd();
 
