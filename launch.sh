@@ -14,7 +14,7 @@ mkdir -p "$HOME/.claude"
 
 docker_extra_args=()
 tmpworkdir=""
-pi_args=()
+harness_args=()
 cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
@@ -62,14 +62,14 @@ while true; do
 done
 
 # remaining arguments are passed through to pi inside the container
-pi_args=("$@")
+harness_args=("$@")
 
 # ephemeral mode: use a tmp workdir and don't save the session
 if [[ "$ephemeral" -eq 1 ]]; then
     tmpworkdir=$(mktemp -d)
     WORKDIR="$tmpworkdir"
     if [[ "$harness" == "pi" ]]; then
-        pi_args=("--no-session" "${pi_args[@]}")
+        harness_args=("--no-session" "${harness_args[@]}")
     fi
     trap cleanup EXIT
 fi
@@ -149,4 +149,4 @@ exec docker run --rm \
     --ipc=none \
     --pids-limit=512 \
     "${docker_extra_args[@]}" \
-    "$IMAGE_NAME" "${pi_args[@]}"
+    "$IMAGE_NAME" "${harness_args[@]}"
