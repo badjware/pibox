@@ -170,6 +170,7 @@ exec docker run --rm \
     -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
     \
     -v "$HOME/.pi:/home/$HOST_USER/.pi${read_only:+:ro}" \
+    -v "$SCRIPT_DIR/pi/extensions/pi-claude-interop:/home/$HOST_USER/.pi/agent/extensions/pi-claude-interop:ro" \
     -v "$HOME/.claude:/home/$HOST_USER/.claude${read_only:+:ro}" \
     -v "$HOME/.claude.json:/home/$HOST_USER/.claude.json${read_only:+:ro}" \
     -v "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro" \
