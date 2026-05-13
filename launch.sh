@@ -9,6 +9,13 @@ HOST_UID="${HOST_UID:-$(id -u)}"
 HOST_GID="${HOST_GID:-$(id -g)}"
 HOST_USER="${HOST_USER:-$(id -un)}"
 
+confirm() {
+    local msg="$1"
+    echo "$0: warning: $msg" >&2
+    read -r -p "proceed? [y/N] " reply >&2
+    [[ "$reply" =~ ^[yY]$ ]] || exit 1
+}
+
 mkdir -p "$HOME/.pi"
 mkdir -p "$HOME/.claude"
 
@@ -65,6 +72,15 @@ while true; do
             ;;
     esac
 done
+
+
+# warn about root
+if [[ "$HOST_UID" -eq 0 ]]; then
+    confirm "running as root"
+fi
+
+# warn about active unsafe options
+[[ "$enable_docker" -eq 1 ]] && confirm "--unsafe-enable-docker enables privileged mode"
 
 # remaining arguments are passed through to pi inside the container
 harness_args=("$@")

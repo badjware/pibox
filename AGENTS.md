@@ -37,6 +37,14 @@ pi/
 
 Unsafe options (`--unsafe-*`) intentionally have no short form to reduce the risk of accidental use.
 
+## launch.sh guards
+
+`launch.sh` prompts the user for confirmation before proceeding in the following cases:
+- running as root (gives the agent unrestricted access to host files)
+- any `--unsafe-*` option is active (e.g. `--unsafe-enable-docker` enables privileged mode)
+
+When adding new unsafe options, always add a call to the `confirm` helper to prompt the user.
+
 ## Harnesses and images
 
 | Harness | Remote image | Local image |
