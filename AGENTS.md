@@ -32,6 +32,7 @@ pi/
 | `--unsafe-enable-docker` | (none, intentional) | enable rootless Docker-in-Docker (privileged) |
 | `--ephemeral`, `--tmp` | `-e` | use a temp workdir; for pi, also passes `--no-session` |
 | `--read-only`, `--ro` | `-r` | mount all volumes read-only |
+| `--volume` | `-v` | bind-mount an extra volume (repeatable; same syntax as `docker run -v`) |
 | `--` | | remaining args forwarded to the agent inside the container |
 
 Unsafe options (`--unsafe-*`) intentionally have no short form to reduce the risk of accidental use.

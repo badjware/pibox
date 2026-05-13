@@ -19,7 +19,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o 'bperH:' --long 'build,pull,unsafe-enable-docker,ephemeral,tmp,read-only,ro,harness:' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'bperH:v:' --long 'build,pull,unsafe-enable-docker,ephemeral,tmp,read-only,ro,harness:,volume:' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
@@ -28,6 +28,7 @@ enable_docker=0
 ephemeral=0
 read_only=""
 harness="pi"
+volumes=()
 while true; do
     case "$1" in
         -b|--build)
@@ -52,6 +53,10 @@ while true; do
             ;;
         -H|--harness)
             harness="$2"
+            shift 2
+            ;;
+        -v|--volume)
+            volumes+=("$2")
             shift 2
             ;;
         --)
@@ -122,6 +127,43 @@ else
     )
 fi
 
+# Resolve the final volume list.
+# Priority: defaults < user-provided < workdir.
+# Volumes with the same container destination are deduplicated; higher priority wins.
+# Insertion order of destinations is important.
+declare -A _vol_map   # container destination -> full volume spec
+_vol_keys=()          # destinations in insertion order
+
+# Register a volume spec. First registration wins the slot; later calls for the
+# same destination overwrite the spec (allowing higher-priority tiers to win).
+_vol_register() {
+    local spec="$1"
+    # Extract container destination: strip leading "src:" then trailing ":opts"
+    local dest="${spec#*:}"
+    dest="${dest%%:*}"
+    [[ -z "${_vol_map[$dest]+x}" ]] && _vol_keys+=("$dest")
+    _vol_map[$dest]="$spec"
+}
+
+# defaults has lowest priority, so we register them first
+_vol_register "$HOME/.pi:/home/$HOST_USER/.pi${read_only:+:ro}"
+_vol_register "$SCRIPT_DIR/pi/extensions/pi-claude-interop:/home/$HOST_USER/.pi/agent/extensions/pi-claude-interop:ro"
+_vol_register "$HOME/.claude:/home/$HOST_USER/.claude${read_only:+:ro}"
+_vol_register "$HOME/.claude.json:/home/$HOST_USER/.claude.json${read_only:+:ro}"
+_vol_register "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro"
+
+# user-provided
+for vol in "${volumes[@]}"; do
+    _vol_register "$vol"
+done
+
+# workdir has highest priority, so we register it last
+_vol_register "$WORKDIR:$WORKDIR${read_only:+:ro}"
+
+for dest in "${_vol_keys[@]}"; do
+    docker_extra_args+=("-v" "${_vol_map[$dest]}")
+done
+
 # check if we are in a tty
 [[ -t 0 && -t 1 ]] && docker_extra_args+=("-it")
 
@@ -138,13 +180,6 @@ exec docker run --rm \
     -e "ANTHROPIC_CUSTOM_HEADERS=${ANTHROPIC_CUSTOM_HEADERS}" \
     -e "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=${CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS}" \
     -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
-    \
-    -v "$HOME/.pi:/home/$HOST_USER/.pi${read_only:+:ro}" \
-    -v "$SCRIPT_DIR/pi/extensions/pi-claude-interop:/home/$HOST_USER/.pi/agent/extensions/pi-claude-interop:ro" \
-    -v "$HOME/.claude:/home/$HOST_USER/.claude${read_only:+:ro}" \
-    -v "$HOME/.claude.json:/home/$HOST_USER/.claude.json${read_only:+:ro}" \
-    -v "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro" \
-    -v "$WORKDIR:$WORKDIR${read_only:+:ro}" \
     -w "$WORKDIR" \
     --ipc=none \
     --pids-limit=512 \

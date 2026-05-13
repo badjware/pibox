@@ -49,19 +49,20 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 ## Usage
 
 ```
-./launch.sh [--harness pi|claude] [--build] [--pull] [--unsafe-enable-docker] [--ephemeral|--tmp] [--read-only] [-- <agent args>]
+./launch.sh [options] [-- <agent args>]
 ```
 
 ### Flags
 
-| Flag                     | Description                                                                                                                                                                                                                                                                         |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--harness pi\|claude`   | Choose the agent to run. Defaults to `pi`.                                                                                                                                                                                                                                          |
-| `--build`                | Build the image locally from the Dockerfiles instead of using the published image.                                                                                                                                                                                                  |
-| `--pull`                 | Update the image prior to launching.                                                                                                                                                                                                                                                |
-| `--unsafe-enable-docker` | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers.                                                                                                                                                                                   |
-| `--ephemeral`, `--tmp`   | Start in a temporary working directory instead of the current one. For pi, also disables session persistence (`--no-session`). |
-| `--read-only`            | Mount everything as read-only inside the container.                                                                                                                                                                                                                                 |
+| Flag                     | Short | Description                                                                                                                    |
+| ------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `--harness pi\|claude`   | `-H`  | Choose the agent to run. Defaults to `pi`.                                                                                     |
+| `--build`                | `-b`  | Build the image locally from the Dockerfiles instead of using the published image.                                             |
+| `--pull`                 | `-p`  | Update the image prior to launching.                                                                                           |
+| `--unsafe-enable-docker` |       | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers.                              |
+| `--ephemeral`, `--tmp`   | `-e`  | Start in a temporary working directory instead of the current one. For pi, also disables session persistence (`--no-session`). |
+| `--read-only`, `--ro`    | `-r`  | Mount all volumes as read-only inside the container.                                                                           |
+| `--volume <spec>`        | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                                                       |
 
 Any arguments after `--` are passed through to the agent inside the container.
 
@@ -80,24 +81,11 @@ Launch Claude Code:
 Pass arguments through to the agent (everything after `--` is forwarded):
 ```sh
 ./launch.sh -- -p "summarize the README"
-./launch.sh --harness claude -- -p "summarize the README"
 ```
 
 Force-refresh the image from GHCR:
 ```sh
 ./launch.sh --pull
-./launch.sh --harness claude --pull
-```
-
-Rebuild images locally (useful when iterating on the Dockerfiles):
-```sh
-./launch.sh --build
-./launch.sh --harness claude --build
-```
-
-Enable Docker-in-Docker:
-```sh
-./launch.sh --unsafe-enable-docker
 ```
 
 ## Environment variables
@@ -126,7 +114,9 @@ The container ships with a minimal set of tools suited to a coding agent:
 
 Tools deliberately **not** installed: `sudo`, `ssh`, `scp`, `curl`, `wget`.
 
-## Bind mounts
+## Default bind mounts
+
+These paths are always bind-mounted.
 
 | Host                      | Container          | Mode |
 | ------------------------- | ------------------ | ---- |
