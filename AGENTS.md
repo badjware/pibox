@@ -40,7 +40,7 @@ Unsafe options (`--unsafe-*`) intentionally have no short form to reduce the ris
 ## launch.sh guards
 
 `launch.sh` prompts the user for confirmation before proceeding in the following cases:
-- running as root (gives the agent unrestricted access to host files)
+- running as root
 - any `--unsafe-*` option is active (e.g. `--unsafe-enable-docker` enables privileged mode)
 
 When adding new unsafe options, always add a call to the `confirm` helper to prompt the user.
@@ -58,7 +58,7 @@ Build order when using `--build`: `Dockerfile.base` → `Dockerfile.<harness>`.
 
 Baked into every image as `/AGENTS.md` (and `/CLAUDE.md` for the claude image).
 This is the file that agents inside the container read to understand the runtime environment.
-When editing agent-facing instructions, edit this file.
+When editing agent-facing instructions that need to persist from one container run to another, edit this file.
 
 ## pi-claude-interop extension
 
@@ -70,7 +70,7 @@ Bridges Claude Code assets to pi at runtime:
 - `models.json.tmpl` → rendered with env vars, registered as a pi provider
 
 When modifying the extension, edit `pi/extensions/pi-claude-interop/index.ts`.
-The extension is TypeScript; compile if a build step is required.
+The extension is in TypeScript.
 
 ## Environment variables forwarded into the container
 
