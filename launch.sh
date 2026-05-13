@@ -19,7 +19,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o '' --long 'build,pull,unsafe-enable-docker,ephemeral,tmp,read-only,harness:' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'bperH:' --long 'build,pull,unsafe-enable-docker,ephemeral,tmp,read-only,ro,harness:' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
@@ -30,11 +30,11 @@ read_only=""
 harness="pi"
 while true; do
     case "$1" in
-        --build)
+        -b|--build)
             build=1
             shift
             ;;
-        --pull)
+        -p|--pull)
             pull=1
             shift
             ;;
@@ -42,15 +42,15 @@ while true; do
             enable_docker=1
             shift
             ;;
-        --ephemeral|--tmp)
+        -e|--ephemeral|--tmp)
             ephemeral=1
             shift
             ;;
-        --read-only)
+        -r|--read-only|--ro)
             read_only=1
             shift
             ;;
-        --harness)
+        -H|--harness)
             harness="$2"
             shift 2
             ;;
