@@ -33,6 +33,7 @@ pi/
 | `--ephemeral`, `--tmp` | `-e` | use a temp workdir; for pi, also passes `--no-session` |
 | `--read-only`, `--ro` | `-r` | mount all volumes read-only |
 | `--volume` | `-v` | bind-mount an extra volume (repeatable; same syntax as `docker run -v`) |
+| `--extra-package` | `-P` | install an extra apt package at container startup (repeatable; non-persistent) |
 | `--` | | remaining args forwarded to the agent inside the container |
 
 Unsafe options (`--unsafe-*`) intentionally have no short form to reduce the risk of accidental use.

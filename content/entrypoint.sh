@@ -88,6 +88,16 @@ start_rootless_docker() {
 
 [[ "$ENABLE_DOCKER" == "1" ]] && start_rootless_docker
 
+# ---------------------------------------------------------------------------
+# Optional: install extra apt packages requested via --extra-package.
+# ---------------------------------------------------------------------------
+if [[ -n "${EXTRA_PACKAGES:-}" ]]; then
+    echo "Installing extra packages: $EXTRA_PACKAGES" >&2
+    apt-get update
+    apt-get install -y --no-install-recommends $EXTRA_PACKAGES
+    rm -rf /var/lib/apt/lists/*
+fi
+
 # Drop root privileges and run the chosen harness as the host user
 case "$HARNESS" in
     pi)     exec runuser -u "$HOST_USER" -- pi "$@" ;;

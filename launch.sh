@@ -26,7 +26,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o 'bperH:v:' --long 'build,pull,unsafe-enable-docker,ephemeral,tmp,read-only,ro,harness:,volume:' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'bperH:v:P:' --long 'build,pull,unsafe-enable-docker,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
@@ -36,6 +36,7 @@ ephemeral=0
 read_only=""
 harness="pi"
 volumes=()
+extra_packages=()
 while true; do
     case "$1" in
         -b|--build)
@@ -64,6 +65,10 @@ while true; do
             ;;
         -v|--volume)
             volumes+=("$2")
+            shift 2
+            ;;
+        -P|--extra-package)
+            extra_packages+=("$2")
             shift 2
             ;;
         --)
@@ -190,6 +195,7 @@ exec docker run --rm \
     -e "HOST_GID=$HOST_GID" \
     -e "HOST_USER=$HOST_USER" \
     -e "HARNESS=$harness" \
+    -e "EXTRA_PACKAGES=${extra_packages[*]}" \
     \
     -e "ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}" \
     -e "ANTHROPIC_DEFAULT_OPUS_MODEL=${ANTHROPIC_DEFAULT_OPUS_MODEL}" \
