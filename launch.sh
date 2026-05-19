@@ -90,7 +90,7 @@ if [[ "$HOST_UID" -eq 0 ]]; then
 fi
 
 # warn about active unsafe options
-[[ "$enable_docker" -eq 1 ]] && confirm "--unsafe-enable-docker enables privileged mode"
+[[ "$enable_docker" -eq 1 && "$acp" -ne 1 ]] && confirm "--unsafe-enable-docker enables privileged mode"
 
 # remaining arguments are passed through to pi inside the container
 harness_args=("$@")

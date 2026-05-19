@@ -54,16 +54,16 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 
 ### Flags
 
-| Flag                     | Short | Description                                                                                                                    |
-| ------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `--harness pi\|claude`   | `-H`  | Choose the agent to run. Defaults to `pi`.                                                                                     |
-| `--build`                | `-b`  | Build the image locally from the Dockerfiles instead of using the published image.                                             |
-| `--pull`                 | `-p`  | Update the image prior to launching.                                                                                           |
-| `--unsafe-enable-docker` |       | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers.                              |
-| `--ephemeral`, `--tmp`   | `-e`  | Start in a temporary working directory instead of the current one. For pi, also disables session persistence (`--no-session`). |
-| `--read-only`, `--ro`    | `-r`  | Mount all volumes as read-only inside the container.                                                                           |
-| `--volume <spec>`        | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                                                       |
-| `--acp`                  |       | Run an ACP adapter instead of the TUI. Only valid with `--harness pi`.                                                         |
+| Flag                     | Short | Description                                                                                                                                                                 |
+| ------------------------ | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--harness pi\|claude`   | `-H`  | Choose the agent to run. Defaults to `pi`.                                                                                                                                  |
+| `--build`                | `-b`  | Build the image locally from the Dockerfiles instead of using the published image.                                                                                          |
+| `--pull`                 | `-p`  | Update the image prior to launching.                                                                                                                                        |
+| `--unsafe-enable-docker` |       | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers.                                                                           |
+| `--ephemeral`, `--tmp`   | `-e`  | Start in a temporary working directory instead of the current one. For pi, also disables session persistence (`--no-session`).                                              |
+| `--read-only`, `--ro`    | `-r`  | Mount all volumes as read-only inside the container.                                                                                                                        |
+| `--volume <spec>`        | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                                                                                                    |
+| `--acp`                  |       | Run an ACP adapter instead of the TUI. Only valid with `--harness pi`. |
 
 Any arguments after `--` are passed through to the agent inside the container.
 
