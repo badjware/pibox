@@ -16,8 +16,11 @@ confirm() {
     [[ "$reply" =~ ^[yY]$ ]] || exit 1
 }
 
-mkdir -p "$HOME/.pi"
-mkdir -p "$HOME/.claude"
+# ensure file exists on host to avoid creating them as root
+mkdir -p "$HOME/.pi/sessions"
+mkdir -p "$HOME/.pi/pi-acp"
+mkdir -p "$HOME/.claude/project"
+touch "$HOME/.claude.json"
 
 docker_extra_args=()
 tmpworkdir=""
@@ -185,6 +188,7 @@ _vol_register() {
 # defaults has lowest priority, so we register them first
 _vol_register "$HOME/.pi:/home/$HOST_USER/.pi${read_only:+:ro}"
 _vol_register "$HOME/.pi/sessions:/home/$HOST_USER/.pi/agent/sessions:rw" # pi sessions folder is always rw
+_vol_register "$HOME/.pi/sessions:/home/$HOST_USER/.pi/pi-acp/:rw" # pi-acp folder is always rw
 _vol_register "$SCRIPT_DIR/pi/extensions/pi-claude-interop:/home/$HOST_USER/.pi/agent/extensions/pi-claude-interop:ro"
 _vol_register "$HOME/.claude:/home/$HOST_USER/.claude${read_only:+:ro}"
 _vol_register "$HOME/.claude/project:/home/$HOST_USER/.claude/project:rw" # claude projects folder is always rw
