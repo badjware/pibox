@@ -26,7 +26,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o 'bperH:v:P:' --long 'build,pull,unsafe-enable-docker,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'bperH:v:P:' --long 'build,pull,unsafe-enable-docker,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,acp' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
@@ -35,6 +35,7 @@ enable_docker=0
 ephemeral=0
 read_only=""
 harness="pi"
+acp=0
 volumes=()
 extra_packages=()
 while true; do
@@ -71,6 +72,10 @@ while true; do
             extra_packages+=("$2")
             shift 2
             ;;
+        --acp)
+            acp=1
+            shift
+            ;;
         --)
             shift
             break
@@ -90,17 +95,25 @@ fi
 # remaining arguments are passed through to pi inside the container
 harness_args=("$@")
 
+# --acp is only supported with the pi harness (uses pi-acp adapter).
+if [[ "$acp" -eq 1 && "$harness" != "pi" ]]; then
+    echo "$0: --acp is only supported with --harness pi" >&2
+    exit 2
+fi
+
 # ephemeral mode: use a tmp workdir and don't save the session
 if [[ "$ephemeral" -eq 1 ]]; then
     tmpworkdir=$(mktemp -d)
     WORKDIR="$tmpworkdir"
-    if [[ "$harness" == "pi" ]]; then
+    # --no-session is a pi flag; pi-acp manages sessions on its own.
+    if [[ "$harness" == "pi" && "$acp" -eq 0 ]]; then
         harness_args=("--no-session" "${harness_args[@]}")
     fi
     trap cleanup EXIT
 fi
 
 # resolve image names from harness
+# (--acp reuses the pi image; pi-acp is installed alongside pi.)
 case "$harness" in
     pi)     REMOTE_IMAGE="ghcr.io/badjware/pibox:pi"
             LOCAL_IMAGE="pibox:pi" ;;
@@ -108,6 +121,9 @@ case "$harness" in
             LOCAL_IMAGE="pibox:claude" ;;
     *)      echo "$0: unknown --harness value: $harness" >&2; exit 2 ;;
 esac
+
+# In ACP mode, the in-container harness is pi-acp (not pi).
+[[ "$acp" -eq 1 ]] && harness="pi-acp"
 
 # determine which image to use
 if [[ "$build" -eq 1 ]]; then
@@ -187,8 +203,14 @@ for dest in "${_vol_keys[@]}"; do
     docker_extra_args+=("-v" "${_vol_map[$dest]}")
 done
 
-# check if we are in a tty
-[[ -t 0 && -t 1 ]] && docker_extra_args+=("-it")
+# In ACP mode, the editor (e.g. Zed) speaks JSON-RPC 2.0 over stdio to the
+# spawned process. We must attach stdin (-i) but never allocate a TTY (-t),
+# which would wrap stdout in a PTY and corrupt JSON-RPC framing.
+if [[ "$acp" -eq 1 ]]; then
+    docker_extra_args+=("-i")
+elif [[ -t 0 && -t 1 ]]; then
+    docker_extra_args+=("-it")
+fi
 
 exec docker run --rm \
     -e "HOST_UID=$HOST_UID" \

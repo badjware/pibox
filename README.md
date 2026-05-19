@@ -63,30 +63,60 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 | `--ephemeral`, `--tmp`   | `-e`  | Start in a temporary working directory instead of the current one. For pi, also disables session persistence (`--no-session`). |
 | `--read-only`, `--ro`    | `-r`  | Mount all volumes as read-only inside the container.                                                                           |
 | `--volume <spec>`        | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                                                       |
+| `--acp`                  |       | Run an ACP adapter instead of the TUI. Only valid with `--harness pi`.                                                         |
 
 Any arguments after `--` are passed through to the agent inside the container.
 
 ### Examples
 
 Launch pi (default):
+
 ```sh
 ./launch.sh
 ```
 
 Launch Claude Code:
+
 ```sh
 ./launch.sh --harness claude
 ```
 
 Pass arguments through to the agent (everything after `--` is forwarded):
+
 ```sh
 ./launch.sh -- -p "summarize the README"
 ```
 
 Force-refresh the image from GHCR:
+
 ```sh
 ./launch.sh --pull
 ```
+
+## ACP
+
+With `--acp`, pibox runs the [`pi-acp`](https://github.com/svkozak/pi-acp)
+adapter inside the container instead of the interactive `pi` TUI. The adapter
+speaks the [Agent Client Protocol](https://agentclientprotocol.com/) over
+stdio, so any ACP-capable editor can spawn `launch.sh --acp` as a child
+process and talk to pi through it.
+
+Example Zed `settings.json`:
+
+```json
+{
+  "agent_servers": {
+    "pibox": {
+      "type": "custom",
+      "command": "/path/to/pibox/launch.sh",
+      "args": ["--acp"],
+      "env": {}
+    }
+  }
+}
+```
+
+Claude Code is not supported with `--acp`.
 
 ## Environment variables
 
