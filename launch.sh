@@ -29,12 +29,13 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o 'bperH:v:P:' --long 'build,pull,unsafe-enable-docker,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,acp' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'bperH:v:P:' --long 'build,pull,unsafe-enable-docker,unsafe-net-host,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,acp' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
 pull=0
 enable_docker=0
+net_host=0
 ephemeral=0
 read_only=""
 harness="pi"
@@ -53,6 +54,10 @@ while true; do
             ;;
         --unsafe-enable-docker)
             enable_docker=1
+            shift
+            ;;
+        --unsafe-net-host)
+            net_host=1
             shift
             ;;
         -e|--ephemeral|--tmp)
@@ -94,6 +99,7 @@ fi
 
 # warn about active unsafe options
 [[ "$enable_docker" -eq 1 && "$acp" -ne 1 ]] && confirm "--unsafe-enable-docker enables privileged mode"
+[[ "$net_host" -eq 1 ]] && confirm "--unsafe-net-host shares the host network namespace"
 
 # remaining arguments are passed through to pi inside the container
 harness_args=("$@")
@@ -165,6 +171,10 @@ else
         "--cap-add=SETGID"
         "--cap-add=KILL"
     )
+fi
+
+if [[ "$net_host" -eq 1 ]]; then
+    docker_extra_args+=("--network=host")
 fi
 
 # Resolve the final volume list.
