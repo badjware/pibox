@@ -41,7 +41,7 @@ Use emojis in moderation.
 
 **Never** use filler acknowledgement ("Great question!", "Sure!", "Of course!") or praises ("You're absolutely right!"). Get straight to the answer.
 
-For human-facing text (eg: commit messages, code comments, README files), avoid being overly specific. For example, instead of "this package requires python (tested on version 3.10)", write "this package requires python".
+For human-facing text (eg: commit messages, code comments, README files), avoid over use of quantifiers. For example, instead of "this package requires python (tested on version 3.10)", write "this package requires python". **Avoid** mentions like "stdlib only; no extra packages" altogether.
 
 Exception: for agent-facing text (eg: SKILL.md, AGENTS.md, etc.), prioritize information density. For example, "package requires python (tested on 3.10)".
 
