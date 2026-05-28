@@ -1,0 +1,20 @@
+#compdef pibox launch.sh
+
+_pibox() {
+    _arguments -S \
+        '--build[build images locally instead of pulling]' \
+        '--pull[pull latest image before launch]' \
+        '--harness[agent to run]:harness:(pi claude)' \
+        '--ephemeral[use a temp workdir]' \
+        '--read-only[mount all volumes read-only]' \
+        '*--volume[bind-mount an extra volume]:volume:_files' \
+        '*--extra-package[install an extra apt package at startup]:package:' \
+        '--unsafe-enable-docker[enable rootless Docker-in-Docker (privileged)]' \
+        '--unsafe-enable-aws[mount ~/.aws into the container]' \
+        '--unsafe-enable-kube[mount ~/.kube into the container]' \
+        '--unsafe-net-host[share the host network namespace]' \
+        '--acp[run the pi-acp adapter (pi harness only)]' \
+        '(-)--[forward remaining args to the agent]:: :_default'
+}
+
+_pibox "$@"
