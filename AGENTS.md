@@ -42,6 +42,12 @@ pi/
 
 Unsafe options (`--unsafe-*`) intentionally have no short form to reduce the risk of accidental use.
 
+## Shell completions
+
+Zsh completion lives at `completions/_pibox`. When adding, removing, or renaming a flag in `launch.sh`, update `completions/_pibox` to match. The flag list is duplicated by design (no auto-generation); keep the two in sync.
+
+Convention: list only the longest long form of each flag in the completion. Short forms (`-b`, `-p`, etc.) and shorter long-form aliases (e.g. `--tmp` for `--ephemeral`, `--ro` for `--read-only`) still work at the parser level but are omitted from the menu to reduce noise. One entry per flag, no duplicates.
+
 ## launch.sh guards
 
 `launch.sh` prompts the user for confirmation before proceeding in the following cases:

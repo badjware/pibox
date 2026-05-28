@@ -93,6 +93,16 @@ Force-refresh the image from GHCR:
 ./launch.sh --pull
 ```
 
+## Shell completion
+
+A zsh completion is provided at `completions/_pibox`. To enable it, add the
+`completions/` directory to your `$fpath` before `compinit` in `~/.zshrc`:
+
+```zsh
+fpath=(/path/to/pibox/completions $fpath)
+autoload -U compinit && compinit
+```
+
 ## ACP
 
 With `--acp`, pibox runs the [`pi-acp`](https://github.com/svkozak/pi-acp)
