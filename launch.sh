@@ -29,12 +29,14 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o 'bperH:v:P:' --long 'build,pull,unsafe-enable-docker,unsafe-net-host,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,acp' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'bperH:v:P:' --long 'build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-net-host,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,acp' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
 pull=0
 enable_docker=0
+enable_aws=0
+enable_kube=0
 net_host=0
 ephemeral=0
 read_only=""
@@ -54,6 +56,14 @@ while true; do
             ;;
         --unsafe-enable-docker)
             enable_docker=1
+            shift
+            ;;
+        --unsafe-enable-aws)
+            enable_aws=1
+            shift
+            ;;
+        --unsafe-enable-kube)
+            enable_kube=1
             shift
             ;;
         --unsafe-net-host)
@@ -99,7 +109,13 @@ fi
 
 # warn about active unsafe options
 [[ "$enable_docker" -eq 1 && "$acp" -ne 1 ]] && confirm "--unsafe-enable-docker enables privileged mode"
+[[ "$enable_aws" -eq 1 ]] && confirm "--unsafe-enable-aws mounts ~/.aws into the container"
+[[ "$enable_kube" -eq 1 ]] && confirm "--unsafe-enable-kube mounts ~/.kube into the container"
 [[ "$net_host" -eq 1 ]] && confirm "--unsafe-net-host shares the host network namespace"
+
+# ensure host dirs exist before bind-mounting so docker doesn't create them as root
+[[ "$enable_aws" -eq 1 ]] && mkdir -p "$HOME/.aws"
+[[ "$enable_kube" -eq 1 ]] && mkdir -p "$HOME/.kube"
 
 # remaining arguments are passed through to pi inside the container
 harness_args=("$@")
@@ -203,6 +219,8 @@ _vol_register "$HOME/.claude:/home/$HOST_USER/.claude${read_only:+:ro}"
 _vol_register "$HOME/.claude/project:/home/$HOST_USER/.claude/project:rw" # claude projects folder is always rw
 _vol_register "$HOME/.claude.json:/home/$HOST_USER/.claude.json:rw" # claude really hates to have its config file read-only
 _vol_register "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro"
+[[ "$enable_aws" -eq 1 ]] && _vol_register "$HOME/.aws:/home/$HOST_USER/.aws${read_only:+:ro}"
+[[ "$enable_kube" -eq 1 ]] && _vol_register "$HOME/.kube:/home/$HOST_USER/.kube${read_only:+:ro}"
 
 # user-provided
 for vol in "${volumes[@]}"; do

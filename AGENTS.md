@@ -30,6 +30,8 @@ pi/
 | `--build` | `-b` | build images locally instead of pulling |
 | `--pull` | `-p` | pull latest image before launch |
 | `--unsafe-enable-docker` | (none, intentional) | enable rootless Docker-in-Docker (privileged) |
+| `--unsafe-enable-aws` | (none, intentional) | mount `~/.aws` into the container (awscli is pre-installed) |
+| `--unsafe-enable-kube` | (none, intentional) | mount `~/.kube` into the container (kubectl is pre-installed) |
 | `--unsafe-net-host` | (none, intentional) | share the host network namespace (`--network=host`) |
 | `--ephemeral`, `--tmp` | `-e` | use a temp workdir; for pi, also passes `--no-session` |
 | `--read-only`, `--ro` | `-r` | mount all volumes read-only |

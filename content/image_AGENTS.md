@@ -13,6 +13,7 @@ You are running as a user that mirrors the host's UID, GID, and username. File o
 
 ## Available CLI tools
 A short list of tools are pre-installed:
+- `curl`
 - `git`
 - `node`, `npm`
 - `python3` (also available as `python`)
@@ -21,7 +22,7 @@ A short list of tools are pre-installed:
 - `vim` (`$EDITOR` is set to `vim`)
 - Standard GNU coreutils, bash utilities
 
-Not available: `sudo`, `ssh`, `scp`, `curl`, `wget`
+Not available: `sudo`, `ssh`, `scp`, `wget`
 
 **Never** use `grep` or `find`. **Always** use `rg` instead of `grep`, and `fd` instead of `find`.
 
