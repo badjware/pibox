@@ -214,7 +214,6 @@ _vol_register() {
 # defaults has lowest priority, so we register them first
 _vol_register "$HOME/.pi:/home/$HOST_USER/.pi:rw"
 _vol_register "$HOME/.pi/agent/extensions:/home/$HOST_USER/.pi/agent/extensions${read_only:+:ro}"
-_vol_register "$SCRIPT_DIR/pi/extensions/pi-claude-interop:/home/$HOST_USER/.pi/agent/extensions/pi-claude-interop:ro"
 _vol_register "$HOME/.claude:/home/$HOST_USER/.claude${read_only:+:ro}"
 _vol_register "$HOME/.claude/project:/home/$HOST_USER/.claude/project:rw" # claude projects folder is always rw
 _vol_register "$HOME/.claude.json:/home/$HOST_USER/.claude.json:rw" # claude really hates to have its config file read-only

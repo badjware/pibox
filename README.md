@@ -136,10 +136,10 @@ the container:
 | Variable                                 | Used by    |
 | ---------------------------------------- | ---------- |
 | `ANTHROPIC_AUTH_TOKEN`                   | pi, claude |
-| `ANTHROPIC_BASE_URL`                     | pi, claude |
-| `ANTHROPIC_DEFAULT_OPUS_MODEL`           | pi, claude |
-| `ANTHROPIC_DEFAULT_SONNET_MODEL`         | pi, claude |
-| `ANTHROPIC_DEFAULT_HAIKU_MODEL`          | pi, claude |
+| `ANTHROPIC_BASE_URL`                     | claude     |
+| `ANTHROPIC_DEFAULT_OPUS_MODEL`           | claude     |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL`         | claude     |
+| `ANTHROPIC_DEFAULT_HAIKU_MODEL`          | claude     |
 | `ANTHROPIC_CUSTOM_HEADERS`               | claude     |
 | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` | claude     |
 
