@@ -15,11 +15,6 @@ Dockerfile.claude                   # extends base; installs @anthropic-ai/claud
 content/
   image_AGENTS.md                   # AGENTS.md baked into the image at /AGENTS.md (and /CLAUDE.md for claude)
   entrypoint.sh                     # container entrypoint
-pi/
-  extensions/
-    pi-claude-interop/
-      index.ts                      # pi extension: bridges Claude Code assets (commands, skills, rules) to pi
-      models.json.tmpl              # provider/model config template rendered with process.env at runtime
 ```
 
 ## launch.sh flags
@@ -71,17 +66,9 @@ Baked into every image as `/AGENTS.md` (and `/CLAUDE.md` for the claude image).
 This is the file that agents inside the container read to understand the runtime environment.
 When editing agent-facing instructions that need to persist from one container run to another, edit this file.
 
-## pi-claude-interop extension
+## pi extensions
 
-Mounted read-only at `~/.pi/agent/extensions/pi-claude-interop` inside the container.
-Bridges Claude Code assets to pi at runtime:
-- `.claude/commands/**/*.md` and `~/.claude/commands/**/*.md` → pi prompt templates
-- `.claude/skills/` and `~/.claude/skills/` → pi skill paths
-- `.claude/rules/*.md` → injected into pi system prompt
-- `models.json.tmpl` → rendered with env vars, registered as a pi provider
-
-When modifying the extension, edit `pi/extensions/pi-claude-interop/index.ts`.
-The extension is in TypeScript.
+The host's `~/.pi/agent/extensions` directory is bind-mounted into the container, so any pi extensions installed on the host (including `pi-claude-interop`, which lives in its own repo) are available inside pibox automatically. pibox itself no longer ships any bundled extensions.
 
 ## Environment variables forwarded into the container
 
