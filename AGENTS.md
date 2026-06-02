@@ -28,7 +28,7 @@ content/
 | `--unsafe-enable-aws` | (none, intentional) | mount `~/.aws` into the container (awscli is pre-installed) |
 | `--unsafe-enable-kube` | (none, intentional) | mount `~/.kube` into the container (kubectl is pre-installed) |
 | `--unsafe-net-host` | (none, intentional) | share the host network namespace (`--network=host`) |
-| `--ephemeral`, `--tmp` | `-e` | use a temp workdir; for pi, also passes `--no-session` |
+| `--ephemeral`, `--tmp` | `-e` | use a temp workdir |
 | `--read-only`, `--ro` | `-r` | mount all volumes read-only |
 | `--volume` | `-v` | bind-mount an extra volume (repeatable; same syntax as `docker run -v`) |
 | `--extra-package` | `-P` | install an extra apt package at container startup (repeatable; non-persistent) |
