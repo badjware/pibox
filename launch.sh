@@ -126,14 +126,10 @@ if [[ "$acp" -eq 1 && "$harness" != "pi" ]]; then
     exit 2
 fi
 
-# ephemeral mode: use a tmp workdir and don't save the session
+# ephemeral mode: use a tmp workdir
 if [[ "$ephemeral" -eq 1 ]]; then
     tmpworkdir=$(mktemp -d)
     WORKDIR="$tmpworkdir"
-    # --no-session is a pi flag; pi-acp manages sessions on its own.
-    if [[ "$harness" == "pi" && "$acp" -eq 0 ]]; then
-        harness_args=("--no-session" "${harness_args[@]}")
-    fi
     trap cleanup EXIT
 fi
 
