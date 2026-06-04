@@ -209,13 +209,13 @@ _vol_register() {
 
 # defaults has lowest priority, so we register them first
 _vol_register "$HOME/.pi:/home/$HOST_USER/.pi:rw"
-_vol_register "$HOME/.pi/agent/extensions:/home/$HOST_USER/.pi/agent/extensions${read_only:+:ro}"
-_vol_register "$HOME/.claude:/home/$HOST_USER/.claude${read_only:+:ro}"
+_vol_register "$HOME/.pi/agent/extensions:/home/$HOST_USER/.pi/agent/extensions:ro" # extensions are read-only at runtime
+_vol_register "$HOME/.claude:/home/$HOST_USER/.claude:ro"
 _vol_register "$HOME/.claude/project:/home/$HOST_USER/.claude/project:rw" # claude projects folder is always rw
 _vol_register "$HOME/.claude.json:/home/$HOST_USER/.claude.json:rw" # claude really hates to have its config file read-only
 _vol_register "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro"
-[[ "$enable_aws" -eq 1 ]] && _vol_register "$HOME/.aws:/home/$HOST_USER/.aws${read_only:+:ro}"
-[[ "$enable_kube" -eq 1 ]] && _vol_register "$HOME/.kube:/home/$HOST_USER/.kube${read_only:+:ro}"
+[[ "$enable_aws" -eq 1 ]] && _vol_register "$HOME/.aws:/home/$HOST_USER/.aws:ro"
+[[ "$enable_kube" -eq 1 ]] && _vol_register "$HOME/.kube:/home/$HOST_USER/.kube:ro"
 
 # user-provided
 for vol in "${volumes[@]}"; do
