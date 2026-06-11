@@ -198,7 +198,8 @@ if [[ "$build" -eq 1 ]]; then
     if [[ -f "$HOME/.npmrc" ]]; then
         npmrc_secret_args=("--secret" "id=npmrc,src=$HOME/.npmrc")
     fi
-    docker build --pull -t pibox:base -f "$SCRIPT_DIR/Dockerfile.base" "$SCRIPT_DIR"
+    docker build --pull -t pibox:base -f "$SCRIPT_DIR/Dockerfile.base" \
+        "${npmrc_secret_args[@]}" "$SCRIPT_DIR"
     docker build -t "$IMAGE_NAME" -f "$SCRIPT_DIR/Dockerfile.$harness" --build-arg BASE_IMAGE=pibox:base \
         "${npmrc_secret_args[@]}" "$SCRIPT_DIR"
 else
