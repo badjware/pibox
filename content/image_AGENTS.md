@@ -1,5 +1,5 @@
 ## Container context
-You are running inside a Docker container (based on Debian).
+You are running inside a Docker container (based on OpenSUSE).
 The container is ephemeral; nothing written outside of bind-mounted paths will survive the session.
 
 ## Filesystem mounts

@@ -33,6 +33,10 @@ done
 # We export DOCKER_HOST / XDG_RUNTIME_DIR so the exec'd pi inherits them.
 # ---------------------------------------------------------------------------
 start_rootless_docker() {
+    # Subordinate UID/GID mappings are required by newuidmap / newgidmap.
+    echo "$HOST_USER:100000:65536" >> /etc/subuid
+    echo "$HOST_USER:100000:65536" >> /etc/subgid
+
     # XDG_RUNTIME_DIR holds the docker socket. The bind-mounted socket file
     # lives here, so it survives rootlesskit's --copy-up=/run overlay and
     # remains reachable from the outer container at the same path.
@@ -89,9 +93,9 @@ start_rootless_docker() {
 # ---------------------------------------------------------------------------
 if [[ -n "${EXTRA_PACKAGES:-}" ]]; then
     echo "Installing extra packages: $EXTRA_PACKAGES" >&2
-    apt-get update
-    apt-get install -y --no-install-recommends $EXTRA_PACKAGES
-    rm -rf /var/lib/apt/lists/*
+    zypper --non-interactive refresh
+    zypper --non-interactive install --no-recommends $EXTRA_PACKAGES
+    zypper clean --all
 fi
 
 # Drop root privileges and run the chosen harness as the host user
