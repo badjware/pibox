@@ -13,23 +13,32 @@ RUN zypper --non-interactive refresh \
         lynx \
         man man-pages \
         ca-certificates curl \
-        docker docker-compose docker-buildx \
-    && zypper addrepo --refresh "https://pkgs.k8s.io/core:/stable:/${KUBECTL_VERSION}/rpm/" kubernetes \
-    && zypper --gpg-auto-import-keys --non-interactive refresh kubernetes \
-    && zypper --non-interactive install --no-recommends kubectl \
-    && ln -sf /usr/bin/python3 /usr/bin/python \
-    && zypper clean --all
+        docker docker-compose docker-buildx containerd \
+    && ln -sf /usr/bin/python3 /usr/bin/python
 
-# awscli comme from multi-stage build since it's not available from a OBS
+# awscli
 COPY --from=awscli /usr/local/aws-cli /usr/local/aws-cli
 RUN ln -sf /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws
 
-RUN zypper --non-interactive remove --clean-deps -y sudo openssh openssh-clients wget wget2 || true
+# google-chrome
+RUN rpm --import https://dl.google.com/linux/linux_signing_key.pub \
+    && zypper addrepo --refresh http://dl.google.com/linux/chrome/rpm/stable/x86_64 google-chrome \
+    && zypper --non-interactive install --no-recommends google-chrome-stable
+
+# kubectl
+RUN zypper addrepo --refresh "https://pkgs.k8s.io/core:/stable:/${KUBECTL_VERSION}/rpm/" kubernetes \
+    && zypper --gpg-auto-import-keys --non-interactive refresh kubernetes \
+    && zypper --non-interactive install --no-recommends kubectl
+
+# cleanup
+RUN zypper --non-interactive remove -y --clean-deps sudo openssh openssh-clients || true \
+    && zypper clean --all
 
 ENV EDITOR=vim
 
 COPY content/image_AGENTS.md /AGENTS.md
 COPY content/entrypoint.sh /entrypoint.sh
+COPY content/google-chrome /usr/local/bin/google-chrome
 
 WORKDIR /
 
