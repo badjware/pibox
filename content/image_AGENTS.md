@@ -16,7 +16,7 @@ Pre-installed:
 - `python3` (also available as `python`)
 - `go`
 - `zip`, `unzip`
-- `rg` (ripgrep), `fd` (find replacement)
+- `rg` (grep replacement), `fd` (find replacement)
 - `bc`, `jq`, `yq`
 - `vim` (`$EDITOR` is set to `vim`)
 - Standard GNU coreutils, bash utilities

@@ -220,6 +220,7 @@ else
     # Also block setuid/setgid binaries from gaining new privileges.
     docker_extra_args+=(
         "--security-opt=no-new-privileges:true"
+        "--security-opt=seccomp=unconfined"
         "--cap-drop=ALL"
         "--cap-add=CHOWN"
         "--cap-add=DAC_OVERRIDE"
@@ -279,6 +280,8 @@ _vol_register "$HOME/.claude:/home/$HOST_USER/.claude:ro"
 _vol_register "$HOME/.claude/project:/home/$HOST_USER/.claude/project:rw" # claude projects folder is always rw
 _vol_register "$HOME/.claude.json:/home/$HOST_USER/.claude.json:rw" # claude really hates to have its config file read-only
 _vol_register "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro"
+_vol_register "/usr/share/fonts:/usr/share/fonts:ro"
+_vol_register "/var/cache/fontconfig:/var/cache/fontconfig:ro"
 [[ "$enable_aws" -eq 1 ]] && _vol_register "$HOME/.aws:/home/$HOST_USER/.aws:ro"
 [[ "$enable_kube" -eq 1 ]] && _vol_register "$HOME/.kube:/home/$HOST_USER/.kube:ro"
 
@@ -318,7 +321,6 @@ exec docker run --rm \
     -e "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=${CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS}" \
     -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
     -w "$WORKDIR" \
-    --ipc=none \
     --pids-limit=512 \
     "${docker_extra_args[@]}" \
     "$IMAGE_NAME" "${harness_args[@]}"

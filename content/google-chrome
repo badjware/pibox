@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /opt/google/chrome/google-chrome --ozone-platform=wayland --disable-gpu "$@"
