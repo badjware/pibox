@@ -21,13 +21,15 @@ content/
 
 | Flag | Short | Description |
 |---|---|---|
+| `--help` | `-h` | show usage help and exit |
 | `--harness pi\|claude` | `-H` | agent to run (default: `pi`) |
 | `--build` | `-b` | build images locally instead of pulling |
 | `--pull` | `-p` | pull latest image before launch |
 | `--unsafe-enable-docker` | (none, intentional) | enable rootless Docker-in-Docker (privileged) |
 | `--unsafe-enable-aws` | (none, intentional) | mount `~/.aws` into the container (awscli is pre-installed) |
 | `--unsafe-enable-kube` | (none, intentional) | mount `~/.kube` into the container (kubectl is pre-installed) |
-| `--unsafe-net-host` | (none, intentional) | share the host network namespace (`--network=host`) |
+| `--unsafe-host-wayland` | (none, intentional) | mount the Wayland socket into the container and forward Wayland env vars |
+| `--unsafe-host-net` | (none, intentional) | share the host network namespace (`--network=host`) |
 | `--ephemeral`, `--tmp` | `-e` | use a temp workdir |
 | `--read-only`, `--ro` | `-r` | mount all volumes read-only |
 | `--volume` | `-v` | bind-mount an extra volume (repeatable; same syntax as `docker run -v`) |
@@ -43,6 +45,8 @@ Zsh completion lives at `completions/_pibox`. When adding, removing, or renaming
 
 Convention: list only the longest long form of each flag in the completion. Short forms (`-b`, `-p`, etc.) and shorter long-form aliases (e.g. `--tmp` for `--ephemeral`, `--ro` for `--read-only`) still work at the parser level but are omitted from the menu to reduce noise. One entry per flag, no duplicates.
 
+`--help` / `-h` prints a built-in usage summary from `launch.sh`.
+
 ## launch.sh guards
 
 `launch.sh` prompts the user for confirmation before proceeding in the following cases:
@@ -50,6 +54,8 @@ Convention: list only the longest long form of each flag in the completion. Shor
 - any `--unsafe-*` option is active (e.g. `--unsafe-enable-docker` enables privileged mode)
 
 When adding new unsafe options, always add a call to the `confirm` helper to prompt the user.
+
+`--sac-moe-patience` is an undocumented escape hatch that skips all confirmation prompts. Do not add it to the public flag table, shell completions, or help text.
 
 ## Harnesses and images
 

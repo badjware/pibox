@@ -2,6 +2,7 @@
 
 _pibox() {
     _arguments -S \
+        '--help[show help text and exit]' \
         '--build[build images locally instead of pulling]' \
         '--pull[pull latest image before launch]' \
         '--harness[agent to run]:harness:(pi claude)' \
@@ -12,7 +13,8 @@ _pibox() {
         '--unsafe-enable-docker[enable rootless Docker-in-Docker (privileged)]' \
         '--unsafe-enable-aws[mount ~/.aws into the container]' \
         '--unsafe-enable-kube[mount ~/.kube into the container]' \
-        '--unsafe-net-host[share the host network namespace]' \
+        '--unsafe-host-wayland[mount the Wayland socket into the container]' \
+        '--unsafe-host-net[share the host network namespace]' \
         '--acp[run the pi-acp adapter (pi harness only)]' \
         '(-)--[forward remaining args to the agent]:: :_default'
 }
