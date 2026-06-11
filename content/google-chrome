@@ -1,2 +1,9 @@
 #!/bin/sh
-exec /opt/google/chrome/google-chrome --ozone-platform=wayland --disable-gpu "$@"
+#
+for arg in "$@"; do
+    case "$arg" in
+        --headless*) echo "google-chrome: headless mode is not allowed" >&2; exit 1 ;;
+    esac
+done
+
+exec /opt/google/chrome/google-chrome --ozone-platform=wayland "$@"

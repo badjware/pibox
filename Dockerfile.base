@@ -25,6 +25,10 @@ RUN rpm --import https://dl.google.com/linux/linux_signing_key.pub \
     && zypper addrepo --refresh http://dl.google.com/linux/chrome/rpm/stable/x86_64 google-chrome \
     && zypper --non-interactive install --no-recommends google-chrome-stable
 
+# playwright
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
+    npm install -g playwright
+
 # kubectl
 RUN zypper addrepo --refresh "https://pkgs.k8s.io/core:/stable:/${KUBECTL_VERSION}/rpm/" kubernetes \
     && zypper --gpg-auto-import-keys --non-interactive refresh kubernetes \
@@ -35,6 +39,7 @@ RUN zypper --non-interactive remove -y --clean-deps sudo openssh openssh-clients
     && zypper clean --all
 
 ENV EDITOR=vim
+ENV NODE_PATH=/usr/local/lib/node_modules:/usr/lib/node_modules
 
 COPY content/image_AGENTS.md /AGENTS.md
 COPY content/entrypoint.sh /entrypoint.sh
