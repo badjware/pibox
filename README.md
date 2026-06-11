@@ -54,16 +54,22 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 
 ### Flags
 
-| Flag                     | Short | Description                                                                                                                                                                 |
-| ------------------------ | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--harness pi\|claude`   | `-H`  | Choose the agent to run. Defaults to `pi`.                                                                                                                                  |
-| `--build`                | `-b`  | Build the image locally from the Dockerfiles instead of using the published image.                                                                                          |
-| `--pull`                 | `-p`  | Update the image prior to launching.                                                                                                                                        |
-| `--unsafe-enable-docker` |       | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers.                                                                           |
-| `--ephemeral`, `--tmp`   | `-e`  | Start in a temporary working directory instead of the current one.                                              |
-| `--read-only`, `--ro`    | `-r`  | Mount all volumes as read-only inside the container.                                                                                                                        |
-| `--volume <spec>`        | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                                                                                                    |
-| `--acp`                  |       | Run an ACP adapter instead of the TUI. Only valid with `--harness pi`. |
+| Flag                       | Short | Description                                                                                       |
+| -------------------------- | ----- | ------------------------------------------------------------------------------------------------- |
+| `--help`                   | `-h`  | Show usage help and exit.                                                                         |
+| `--harness pi\|claude`     | `-H`  | Choose the agent to run. Defaults to `pi`.                                                        |
+| `--build`                  | `-b`  | Build the image locally from the Dockerfiles instead of using the published image.                |
+| `--pull`                   | `-p`  | Update the image prior to launching.                                                              |
+| `--unsafe-enable-docker`   |       | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers. |
+| `--unsafe-enable-aws`      |       | Mount `~/.aws` into the container.                                                                |
+| `--unsafe-enable-kube`     |       | Mount `~/.kube` into the container.                                                               |
+| `--unsafe-host-wayland`    |       | Mount the Wayland socket into the container and forward Wayland environment variables.            |
+| `--unsafe-host-net`        |       | Share the host network namespace.                                                                 |
+| `--ephemeral`, `--tmp`     | `-e`  | Start in a temporary working directory instead of the current one.                                |
+| `--read-only`, `--ro`      | `-r`  | Mount all volumes as read-only inside the container.                                              |
+| `--volume <spec>`          | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                          |
+| `--extra-package <name>`   | `-P`  | Install an extra apt package at container startup. Repeatable and non-persistent.                 |
+| `--acp`                    |       | Run an ACP adapter instead of the TUI. Only valid with `--harness pi`.                            |
 
 Any arguments after `--` are passed through to the agent inside the container.
 
@@ -91,6 +97,12 @@ Force-refresh the image from GHCR:
 
 ```sh
 ./launch.sh --pull
+```
+
+Forward Wayland for GUI apps:
+
+```sh
+./launch.sh --unsafe-host-wayland
 ```
 
 ## Shell completion
@@ -142,6 +154,8 @@ the container:
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL`          | claude     |
 | `ANTHROPIC_CUSTOM_HEADERS`               | claude     |
 | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` | claude     |
+| `WAYLAND_DISPLAY`                        | optional   |
+| `XDG_RUNTIME_DIR`                        | optional   |
 
 ## What's inside the image
 

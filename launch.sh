@@ -9,8 +9,38 @@ HOST_UID="${HOST_UID:-$(id -u)}"
 HOST_GID="${HOST_GID:-$(id -g)}"
 HOST_USER="${HOST_USER:-$(id -un)}"
 
+skip_confirm=0
+
+usage() {
+    cat <<EOF
+Usage: $0 [options] [-- agent-args...]
+
+Options:
+  -h, --help                    show this help text and exit
+  -H, --harness pi|claude       agent to run (default: pi)
+  -b, --build                   build images locally instead of pulling
+  -p, --pull                    pull latest image before launch
+  -e, --ephemeral, --tmp        use a temp workdir
+  -r, --read-only, --ro         mount all volumes read-only
+  -v, --volume VOLUME           bind-mount an extra volume (repeatable)
+  -P, --extra-package PACKAGE   install an extra apt package at startup (repeatable)
+      --unsafe-enable-docker    enable rootless Docker-in-Docker (privileged)
+      --unsafe-enable-aws       mount ~/.aws into the container
+      --unsafe-enable-kube      mount ~/.kube into the container
+      --unsafe-host-wayland     mount the Wayland socket into the container
+      --unsafe-host-net         share the host network namespace
+      --acp                     run the pi-acp adapter instead of pi (pi harness only)
+
+Anything after -- is forwarded to the agent inside the container.
+EOF
+}
+
 confirm() {
     local msg="$1"
+    if [[ "$skip_confirm" -eq 1 ]]; then
+        echo "$0: warning: $msg (skipped by --sac-moe-patience)" >&2
+        return
+    fi
     echo "$0: warning: $msg" >&2
     read -r -p "proceed? [y/N] " reply >&2
     [[ "$reply" =~ ^[yY]$ ]] || exit 1
@@ -29,7 +59,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o 'bperH:v:P:' --long 'build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-net-host,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,acp' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'hbperH:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-net,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,acp,sac-moe-patience' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
@@ -37,15 +67,21 @@ pull=0
 enable_docker=0
 enable_aws=0
 enable_kube=0
+forward_wayland=0
 net_host=0
 ephemeral=0
 read_only=""
 harness="pi"
 acp=0
+skip_confirm=0
 volumes=()
 extra_packages=()
 while true; do
     case "$1" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
         -b|--build)
             build=1
             shift
@@ -66,7 +102,11 @@ while true; do
             enable_kube=1
             shift
             ;;
-        --unsafe-net-host)
+        --unsafe-host-wayland)
+            forward_wayland=1
+            shift
+            ;;
+        --unsafe-host-net)
             net_host=1
             shift
             ;;
@@ -94,6 +134,10 @@ while true; do
             acp=1
             shift
             ;;
+        --sac-moe-patience)
+            skip_confirm=1
+            shift
+            ;;
         --)
             shift
             break
@@ -111,7 +155,8 @@ fi
 [[ "$enable_docker" -eq 1 && "$acp" -ne 1 ]] && confirm "--unsafe-enable-docker enables privileged mode"
 [[ "$enable_aws" -eq 1 ]] && confirm "--unsafe-enable-aws mounts ~/.aws into the container"
 [[ "$enable_kube" -eq 1 ]] && confirm "--unsafe-enable-kube mounts ~/.kube into the container"
-[[ "$net_host" -eq 1 ]] && confirm "--unsafe-net-host shares the host network namespace"
+[[ "$forward_wayland" -eq 1 ]] && confirm "--unsafe-host-wayland mounts the Wayland socket into the container"
+[[ "$net_host" -eq 1 ]] && confirm "--unsafe-host-net shares the host network namespace"
 
 # ensure host dirs exist before bind-mounting so docker doesn't create them as root
 [[ "$enable_aws" -eq 1 ]] && mkdir -p "$HOME/.aws"
@@ -187,6 +232,26 @@ fi
 
 if [[ "$net_host" -eq 1 ]]; then
     docker_extra_args+=("--network=host")
+fi
+
+if [[ "$forward_wayland" -eq 1 ]]; then
+    if [[ -z "${WAYLAND_DISPLAY:-}" ]]; then
+        echo "$0: --unsafe-host-wayland requires WAYLAND_DISPLAY to be set" >&2
+        exit 2
+    fi
+
+    wayland_socket="${XDG_RUNTIME_DIR:-/run/user/$HOST_UID}/$WAYLAND_DISPLAY"
+    if [[ ! -S "$wayland_socket" ]]; then
+        echo "$0: Wayland socket not found: $wayland_socket" >&2
+        exit 2
+    fi
+
+    docker_extra_args+=(
+        "-v" "$wayland_socket:/tmp/$WAYLAND_DISPLAY:rw"
+        "-e" "XDG_RUNTIME_DIR=/tmp"
+        "-e" "WAYLAND_DISPLAY=$WAYLAND_DISPLAY"
+        "-e" "XDG_SESSION_TYPE=wayland"
+    )
 fi
 
 # Resolve the final volume list.
