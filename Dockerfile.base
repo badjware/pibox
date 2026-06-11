@@ -1,27 +1,31 @@
-FROM ubuntu:resolute
+FROM debian:bookworm-slim
 
 ARG KUBECTL_APT_VERSION=v1.31
+ARG NODE_VERSION=22
 
-RUN sed -i 's:^path-exclude=/usr/share/man:#path-exclude=/usr/share/man:' /etc/dpkg/dpkg.cfg.d/excludes \
-    && apt-get update && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends tini python-is-python3 nodejs npm golang fd-find ripgrep jq yq bc zip unzip git vim \
-        docker.io docker-compose-v2 uidmap fuse-overlayfs rootlesskit slirp4netns iproute2 \
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends tini python-is-python3 golang fd-find ripgrep jq yq bc zip unzip git vim \
+        uidmap fuse-overlayfs rootlesskit slirp4netns iproute2 \
         lynx \
         man-db manpages \
         awscli \
-        apt-transport-https ca-certificates curl gnupg \
-    # kubectl: add the upstream Kubernetes apt repo, then install.
+        ca-certificates curl gnupg \
     && mkdir -p -m 755 /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+        | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_VERSION}.x nodistro main" \
+        > /etc/apt/sources.list.d/nodesource.list \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg \
+        | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable" \
+        > /etc/apt/sources.list.d/docker.list \
     && curl -fsSL "https://pkgs.k8s.io/core:/stable:/${KUBECTL_APT_VERSION}/deb/Release.key" \
         | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg \
     && echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${KUBECTL_APT_VERSION}/deb/ /" \
         > /etc/apt/sources.list.d/kubernetes.list \
-    && apt-get update && apt-get install -y --no-install-recommends kubectl \
-    && apt-get remove -y sudo openssh-client wget \
+    && apt-get update && apt-get install -y --no-install-recommends nodejs docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin kubectl \
     && apt-get autoremove -y \
-    && rm /usr/bin/man && dpkg-divert --rename --remove /usr/bin/man \
     && ln -s $(which fdfind) /usr/local/bin/fd \
-    && userdel -r ubuntu \
     && rm -rf /var/lib/apt/lists/*
 
 ENV EDITOR=vim
