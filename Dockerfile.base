@@ -4,6 +4,7 @@ FROM amazon/aws-cli:${AWS_CLI_VERSION} AS awscli
 FROM opensuse/tumbleweed
 
 ARG KUBECTL_VERSION=v1.31
+ARG PLAYWRIGHT_VERSION=1.60.0
 
 RUN zypper --non-interactive refresh \
     && zypper --non-interactive dup \
@@ -27,7 +28,7 @@ RUN rpm --import https://dl.google.com/linux/linux_signing_key.pub \
 
 # playwright
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
-    npm install -g playwright
+    npm install -g playwright@${PLAYWRIGHT_VERSION}
 
 # kubectl
 RUN zypper addrepo --refresh "https://pkgs.k8s.io/core:/stable:/${KUBECTL_VERSION}/rpm/" kubernetes \
