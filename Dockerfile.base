@@ -10,11 +10,11 @@ RUN zypper --non-interactive refresh \
     && zypper --non-interactive dup \
     && zypper --non-interactive install --no-recommends \
         tini nodejs npm-default python3 go fd ripgrep jq yq bc zip unzip git vim \
-        fuse-overlayfs rootlesskit slirp4netns iproute2 \
         lynx \
         man man-pages \
         ca-certificates curl \
-        docker docker-compose docker-buildx containerd \
+        docker docker-compose docker-buildx \
+        fuse-overlayfs rootlesskit slirp4netns iproute2 containerd iptables iptables-backend-nft \
     && ln -sf /usr/bin/python3 /usr/bin/python
 
 # awscli
