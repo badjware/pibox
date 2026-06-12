@@ -51,8 +51,10 @@ start_rootless_docker() {
     runuser -u "$HOST_USER" -- \
         env \
             HOME="$USER_HOME" \
+            PATH="/usr/sbin:/usr/local/bin:/usr/bin:/bin" \
             XDG_RUNTIME_DIR="$runtime_dir" \
             XDG_DATA_HOME="$USER_HOME/.local/share" \
+            ${SSL_CERT_FILE:+SSL_CERT_FILE="$SSL_CERT_FILE"} \
         rootlesskit \
             --net=slirp4netns \
             --mtu=65520 \
@@ -66,21 +68,16 @@ start_rootless_docker() {
     local pid=$!
 
     echo "Starting rootless Docker daemon (pid=$pid)..." >&2
-    local timeout=30
-    until [[ -S "$sock" ]]; do
-        if ! kill -0 "$pid" 2>/dev/null; then
-            echo "ERROR: rootless dockerd died during startup. Log:" >&2
-            cat "$log" >&2
-            return 1
-        fi
-        if (( --timeout <= 0 )); then
-            echo "ERROR: rootless dockerd did not become ready within 30s. Log:" >&2
-            tail -50 "$log" >&2
-            return 1
-        fi
-        sleep 1
-    done
-    echo "Rootless Docker daemon is ready (socket: $sock)." >&2
+    sleep 3
+    if ! kill -0 "$pid" 2>/dev/null; then
+        echo "ERROR: rootless dockerd died during startup. Log:" >&2
+        cat "$log" >&2
+    elif ! [[ -S "$sock" ]] || ! DOCKER_HOST="unix://$sock" docker version >/dev/null 2>&1; then
+        echo "ERROR: rootless dockerd is not responsive. Log:" >&2
+        tail -50 "$log" >&2
+    else
+        echo "Rootless Docker daemon is ready (socket: $sock)." >&2
+    fi
 
     export DOCKER_HOST="unix://$sock"
     export XDG_RUNTIME_DIR="$runtime_dir"

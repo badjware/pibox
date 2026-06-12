@@ -283,6 +283,24 @@ _vol_register "$HOME/.claude.json:/home/$HOST_USER/.claude.json:rw" # claude rea
 _vol_register "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro"
 _vol_register "/usr/share/fonts:/usr/share/fonts:ro"
 _vol_register "/var/cache/fontconfig:/var/cache/fontconfig:ro"
+
+# Host CA bundle: prefer $SSL_CERT_FILE if set on the host, else probe a
+# short list of well-known per-distro paths.
+host_ca="${SSL_CERT_FILE:-}"
+if [[ -z "$host_ca" ]]; then
+    for p in \
+        /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem \
+        /etc/ssl/certs/ca-certificates.crt \
+        /etc/ssl/ca-bundle.pem \
+        /etc/pki/tls/certs/ca-bundle.crt \
+        /etc/ssl/cert.pem
+    do
+        [[ -f "$p" ]] && host_ca="$p" && break
+    done
+fi
+if [[ -n "$host_ca" && -f "$host_ca" ]]; then
+    _vol_register "$host_ca:/etc/ssl/host-ca-bundle.pem:ro"
+fi
 [[ "$enable_aws" -eq 1 ]] && _vol_register "$HOME/.aws:/home/$HOST_USER/.aws:ro"
 [[ "$enable_kube" -eq 1 ]] && _vol_register "$HOME/.kube:/home/$HOST_USER/.kube:ro"
 
@@ -313,6 +331,7 @@ exec docker run --rm \
     -e "HOST_USER=$HOST_USER" \
     -e "HARNESS=$harness" \
     -e "EXTRA_PACKAGES=${extra_packages[*]}" \
+    ${host_ca:+-e "SSL_CERT_FILE=/etc/ssl/host-ca-bundle.pem"} \
     \
     -e "ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}" \
     -e "ANTHROPIC_DEFAULT_OPUS_MODEL=${ANTHROPIC_DEFAULT_OPUS_MODEL}" \
