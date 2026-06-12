@@ -6,4 +6,12 @@ for arg in "$@"; do
     esac
 done
 
-exec /opt/google/chrome/google-chrome --ozone-platform=wayland "$@"
+exec /opt/google/chrome/google-chrome \
+    --enable-features=UseOzonePlatform ---ozone-platform=wayland \
+    --disable-gpu \
+    --disable-software-rasterizer \
+    --disable-dev-shm-usage \
+    --no-first-run \
+    --no-default-browser-check \
+    --no-sandbox \
+    "$@"

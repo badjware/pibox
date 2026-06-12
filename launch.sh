@@ -322,6 +322,7 @@ exec docker run --rm \
     -e "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=${CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS}" \
     -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
     -w "$WORKDIR" \
+    --ipc=none \
     --pids-limit=512 \
     "${docker_extra_args[@]}" \
     "$IMAGE_NAME" "${harness_args[@]}"
