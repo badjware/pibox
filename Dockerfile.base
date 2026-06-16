@@ -5,17 +5,21 @@ FROM opensuse/tumbleweed
 
 ARG KUBECTL_VERSION=v1.31
 ARG PLAYWRIGHT_VERSION=1.60.0
+ARG TRAFILATURA_VERSION=2.1.0
 
 RUN zypper --non-interactive refresh \
     && zypper --non-interactive dup \
     && zypper --non-interactive install --no-recommends \
-        tini nodejs npm-default python3 go fd ripgrep jq yq bc zip unzip git vim \
-        lynx \
+        tini nodejs npm-default python3 python3-pipx go fd ripgrep jq yq bc zip unzip git vim \
         man man-pages \
         ca-certificates curl \
         docker docker-compose docker-buildx \
         fuse-overlayfs rootlesskit slirp4netns iproute2 containerd iptables iptables-backend-nft \
     && ln -sf /usr/bin/python3 /usr/bin/python
+
+ENV EDITOR=vim
+ENV NODE_PATH=/usr/local/lib/node_modules:/usr/lib/node_modules
+ENV PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin
 
 # awscli
 COPY --from=awscli /usr/local/aws-cli /usr/local/aws-cli
@@ -30,6 +34,9 @@ RUN rpm --import https://dl.google.com/linux/linux_signing_key.pub \
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     npm install -g playwright@${PLAYWRIGHT_VERSION}
 
+# trafilatura
+RUN pipx install trafilatura==${TRAFILATURA_VERSION}
+
 # kubectl
 RUN zypper addrepo --refresh "https://pkgs.k8s.io/core:/stable:/${KUBECTL_VERSION}/rpm/" kubernetes \
     && zypper --gpg-auto-import-keys --non-interactive refresh kubernetes \
@@ -38,9 +45,6 @@ RUN zypper addrepo --refresh "https://pkgs.k8s.io/core:/stable:/${KUBECTL_VERSIO
 # cleanup
 RUN zypper --non-interactive remove -y --clean-deps sudo openssh openssh-clients || true \
     && zypper clean --all
-
-ENV EDITOR=vim
-ENV NODE_PATH=/usr/local/lib/node_modules:/usr/lib/node_modules
 
 COPY content/image_AGENTS.md /AGENTS.md
 COPY content/entrypoint.sh /entrypoint.sh
