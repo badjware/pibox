@@ -179,7 +179,6 @@ if [[ "$ephemeral" -eq 1 ]]; then
 fi
 
 # resolve image names from harness
-# (--acp reuses the pi image; pi-acp is installed alongside pi.)
 case "$harness" in
     pi)     REMOTE_IMAGE="ghcr.io/badjware/pibox:pi"
             LOCAL_IMAGE="pibox:pi" ;;
@@ -190,6 +189,15 @@ esac
 
 # In ACP mode, the in-container harness is pi-acp (not pi).
 [[ "$acp" -eq 1 ]] && harness="pi-acp"
+
+# save sessions alongside the original workdir when running in ephemeral mode on pi
+if [[ "$ephemeral" -eq 1 && "$harness" =~ ^pi ]]; then
+    if [[ ! " ${harness_args[*]} " =~ " --session-dir " ]]; then
+        session_dir="$WORKDIR/.pi/sessions"
+        mkdir -p "$session_dir"
+        harness_args=("${harness_args[@]}" "--session-dir" "$session_dir")
+    fi
+fi
 
 # determine which image to use
 if [[ "$build" -eq 1 ]]; then
