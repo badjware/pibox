@@ -1,5 +1,5 @@
 #!/bin/sh
-#
+
 for arg in "$@"; do
     case "$arg" in
         --headless*) echo "google-chrome: headless mode is not allowed" >&2; exit 1 ;;
