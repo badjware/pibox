@@ -1,10 +1,17 @@
 #!/bin/sh
 
+ua_flag=
 for arg in "$@"; do
     case "$arg" in
         --headless*) echo "google-chrome: headless mode is not allowed" >&2; exit 1 ;;
+        --user-agent*) ua_flag=1 ;;
     esac
 done
+
+if [ -z "$ua_flag" ]; then
+    AGENT_USER_AGENT="${AGENT_USER_AGENT:-Lynx/2.9.2 libwww-FM/2.14 SSL-MM/1.4.1 OpenSSL/3.0.14}"
+    set -- --user-agent="$AGENT_USER_AGENT" "$@"
+fi
 
 exec /opt/google/chrome/google-chrome \
     --enable-features=UseOzonePlatform ---ozone-platform=wayland \
