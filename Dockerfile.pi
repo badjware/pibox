@@ -1,7 +1,7 @@
 ARG BASE_IMAGE=pibox:base
 FROM ${BASE_IMAGE}
 
-ARG PI_CODING_AGENT_VERSION=0.79.4
+ARG PI_CODING_AGENT_VERSION=0.79.7
 ARG PI_ACP_VERSION=0.0.27
 
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
