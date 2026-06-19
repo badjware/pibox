@@ -23,6 +23,11 @@ ENV EDITOR=vim
 ENV NODE_PATH=/usr/local/lib/node_modules:/usr/lib/node_modules
 ENV PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin
 
+# dotnet repo
+RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc \
+    && rpm --import https://packages.microsoft.com/keys/microsoft-2025.asc \
+    && zypper addrepo --refresh https://packages.microsoft.com/config/opensuse/16/prod.repo
+
 # awscli
 COPY --from=awscli /usr/local/aws-cli /usr/local/aws-cli
 RUN ln -sf /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws
