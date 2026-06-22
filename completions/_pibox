@@ -1,4 +1,4 @@
-#compdef pibox launch.sh
+#compdef pibox claudebox launch.sh
 
 _pibox() {
     _arguments -S \
