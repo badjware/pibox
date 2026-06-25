@@ -8,17 +8,16 @@ for arg in "$@"; do
     esac
 done
 
-if [ -z "$ua_flag" ]; then
-    AGENT_USER_AGENT="${AGENT_USER_AGENT:-Lynx/2.9.2 libwww-FM/2.14 SSL-MM/1.4.1 OpenSSL/3.0.14}"
-    set -- --user-agent="$AGENT_USER_AGENT" "$@"
+if [ -z "$ua_flag" ] && [ -n "$CHROME_USER_AGENT" ]; then
+    set -- --user-agent="$CHROME_USER_AGENT" "$@"
 fi
 
 exec /opt/google/chrome/google-chrome \
     --enable-features=UseOzonePlatform ---ozone-platform=wayland \
+    --disable-features=PasswordManager \
     --disable-gpu \
     --disable-software-rasterizer \
     --disable-dev-shm-usage \
     --no-first-run \
-    --no-default-browser-check \
     --no-sandbox \
     "$@"
