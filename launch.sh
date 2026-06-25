@@ -289,6 +289,8 @@ _vol_register "$HOME/.claude:/home/$HOST_USER/.claude:ro"
 _vol_register "$HOME/.claude/project:/home/$HOST_USER/.claude/project:rw" # claude projects folder is always rw
 _vol_register "$HOME/.claude.json:/home/$HOST_USER/.claude.json:rw" # claude really hates to have its config file read-only
 _vol_register "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro"
+_vol_register "pibox-cache:/home/$HOST_USER/.cache:rw"
+_vol_register "/etc/fonts:/etc/fonts:ro"
 _vol_register "/usr/share/fonts:/usr/share/fonts:ro"
 _vol_register "/var/cache/fontconfig:/var/cache/fontconfig:ro"
 
@@ -333,7 +335,13 @@ elif [[ -t 0 && -t 1 ]]; then
     docker_extra_args+=("-it")
 fi
 
+host_tz="${TZ:-}"
+if [[ -z "$host_tz" && -L /etc/localtime ]]; then
+    host_tz="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
+fi
+
 exec docker run --rm \
+    -e "TZ=${host_tz}" \
     -e "HOST_UID=$HOST_UID" \
     -e "HOST_GID=$HOST_GID" \
     -e "HOST_USER=$HOST_USER" \

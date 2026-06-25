@@ -3,10 +3,8 @@ FROM amazon/aws-cli:${AWS_CLI_VERSION} AS awscli
 
 FROM opensuse/tumbleweed
 
-ENV AGENT_USER_AGENT="Lynx/2.9.2 libwww-FM/2.14 SSL-MM/1.4.1 OpenSSL/3.0.14"
-
 ARG KUBECTL_VERSION=v1.31
-ARG PLAYWRIGHT_VERSION=1.60.0
+ARG PLAYWRIGHT_VERSION=1.61.0
 ARG TRAFILATURA_VERSION=2.1.0
 
 RUN zypper --non-interactive refresh \
@@ -39,7 +37,7 @@ RUN rpm --import https://dl.google.com/linux/linux_signing_key.pub \
 
 # playwright
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
-    npm install -g playwright@${PLAYWRIGHT_VERSION}
+    npm install -g patchright@${PLAYWRIGHT_VERSION}
 
 # trafilatura
 RUN pipx install trafilatura==${TRAFILATURA_VERSION}
@@ -56,6 +54,7 @@ RUN zypper --non-interactive remove -y --clean-deps sudo openssh openssh-clients
 COPY content/image_AGENTS.md /AGENTS.md
 COPY content/entrypoint.sh /entrypoint.sh
 COPY content/google-chrome /usr/local/bin/google-chrome
+COPY content/chrome-policies/pibox.json /etc/opt/chrome/policies/managed/pibox.json
 
 WORKDIR /
 
