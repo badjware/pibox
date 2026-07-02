@@ -55,13 +55,7 @@ start_rootless_docker() {
             XDG_RUNTIME_DIR="$runtime_dir" \
             XDG_DATA_HOME="$USER_HOME/.local/share" \
             ${SSL_CERT_FILE:+SSL_CERT_FILE="$SSL_CERT_FILE"} \
-        rootlesskit \
-            --net=slirp4netns \
-            --mtu=65520 \
-            --disable-host-loopback \
-            --copy-up=/etc \
-            --copy-up=/run \
-        dockerd \
+        dockerd-rootless.sh \
             --host="unix://$sock" \
             --storage-driver=fuse-overlayfs \
         </dev/null >>"$log" 2>&1 &
