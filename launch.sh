@@ -358,6 +358,6 @@ exec docker run --rm \
     -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
     -w "$WORKDIR" \
     --ipc=none \
-    --pids-limit=512 \
+    --pids-limit=1024 \
     "${docker_extra_args[@]}" \
     "$IMAGE_NAME" "${harness_args[@]}"

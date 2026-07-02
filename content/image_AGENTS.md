@@ -54,6 +54,6 @@ Match the surrounding style of a file or project when editing the code.
 
 **Be lazy; exert the minimum amount of effort to get the job done**. Avoid scope creep. Avoid premature abstraction (inline first, extract to a function on second use) and premature optimization.
 
-**Always ask for explicit permission before implementing a feature.** Only suggest a plan by default.
+**Always ask for explicit permission before implementing a feature.** Only suggest a plan by default. If the user ask a follow-up question, just answer it but do not consider it an implicit permission to start the implementation.
 
 Avoid multi-paragraph comments. If such a comment seems necessary, reconsider the complexity of the code. **Avoid complexity at all cost.** Comments should never refer to the previous state of the code. For exemple, never write something like "previously, this was implemented with X approach, but that caused Y problem, so now we do Z", instead the comment must always only be relevant to the current state of the code like "we do Z because Y". Make the code self-documenting as much as possible, and use comments to explain *why*, not *how*.

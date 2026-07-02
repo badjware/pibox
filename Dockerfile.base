@@ -10,11 +10,11 @@ ARG TRAFILATURA_VERSION=2.1.0
 RUN zypper --non-interactive refresh \
     && zypper --non-interactive dup \
     && zypper --non-interactive install --no-recommends \
-        tini nodejs npm-default python3 python3-pipx go fd ripgrep jq yq bc zip unzip git vim \
+        tini nodejs npm-default python3 python3-pipx go fd ripgrep jq yq bc zip unzip git vim make \
         man man-pages \
         ca-certificates curl \
-        docker docker-compose docker-buildx \
-        fuse-overlayfs rootlesskit slirp4netns iproute2 containerd iptables iptables-backend-nft \
+        docker docker-compose docker-buildx docker-rootless-extras \
+        fuse-overlayfs iproute2 containerd iptables iptables-backend-nft \
     && ln -sf /usr/bin/python3 /usr/bin/python
 
 ENV EDITOR=vim
