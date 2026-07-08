@@ -257,8 +257,8 @@ if [[ "$forward_wayland" -eq 1 ]]; then
     fi
 
     docker_extra_args+=(
-        "-v" "$wayland_socket:/tmp/$WAYLAND_DISPLAY:rw"
-        "-e" "XDG_RUNTIME_DIR=/tmp"
+        "-v" "$wayland_socket:$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY:rw"
+        "-e" "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
         "-e" "WAYLAND_DISPLAY=$WAYLAND_DISPLAY"
         "-e" "XDG_SESSION_TYPE=wayland"
     )
