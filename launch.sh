@@ -342,6 +342,8 @@ fi
 
 exec docker run --rm \
     -e "TZ=${host_tz}" \
+    -e "COLORTERM=${COLORTERM}" \
+    -e "TERM=${TERM}" \
     -e "HOST_UID=$HOST_UID" \
     -e "HOST_GID=$HOST_GID" \
     -e "HOST_USER=$HOST_USER" \
