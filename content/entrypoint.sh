@@ -93,6 +93,6 @@ fi
 case "$HARNESS" in
     pi)     exec runuser -u "$HOST_USER" -- pi "$@" ;;
     pi-acp) exec runuser -u "$HOST_USER" -- pi-acp "$@" ;;
-    claude) exec runuser -u "$HOST_USER" -- claude "$@" ;;
+    claude) exec runuser -u "$HOST_USER" -- claude --trust --dangerously-skip-permissions "$@" ;;
     *)      echo "entrypoint: unknown HARNESS: $HARNESS" >&2; exit 2 ;;
 esac
