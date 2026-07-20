@@ -77,7 +77,34 @@ start_rootless_docker() {
     export XDG_RUNTIME_DIR="$runtime_dir"
 }
 
+# Rebuild persistent agent modules when a native addon cannot load.
+agent_modules_need_rebuild() {
+    local project_dir="$1" native_module
+    while IFS= read -r -d '' native_module; do
+        runuser -u "$HOST_USER" -- env HOME="$USER_HOME" PATH="/usr/local/bin:/usr/bin:/bin" \
+            node -e 'require(process.argv[1])' "$native_module" >/dev/null 2>&1 || return 0
+    done < <(find "$project_dir/node_modules" -type f -name '*.node' -print0)
+    return 1
+}
+
+rebuild_agent_modules() {
+    local package_json project_dir
+    [[ -d "$USER_HOME/.pi/agent/git" ]] || return
+
+    while IFS= read -r -d '' package_json; do
+        project_dir=${package_json%/package.json}
+        [[ -d "$project_dir/node_modules" ]] || continue
+        agent_modules_need_rebuild "$project_dir" || continue
+
+        echo "Rebuilding npm modules in $project_dir..." >&2
+        runuser -u "$HOST_USER" -- env HOME="$USER_HOME" PATH="/usr/local/bin:/usr/bin:/bin" \
+            sh -c 'cd "$1" && npm rebuild' sh "$project_dir"
+    done < <(find "$USER_HOME/.pi/agent/git" -type f -name package.json -not -path '*/node_modules/*' -print0)
+}
+
 [[ "$ENABLE_DOCKER" == "1" ]] && start_rootless_docker
+
+rebuild_agent_modules
 
 # ---------------------------------------------------------------------------
 # Optional: install extra apt packages requested via --extra-package.
