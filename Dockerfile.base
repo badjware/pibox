@@ -33,8 +33,9 @@ RUN ln -sf /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws
 
 # google-chrome
 RUN rpm --import https://dl.google.com/linux/linux_signing_key.pub \
-    && zypper addrepo --refresh http://dl.google.com/linux/chrome/rpm/stable/x86_64 google-chrome \
-    && zypper --non-interactive install --no-recommends google-chrome-stable
+    && curl --fail --location --output /tmp/google-chrome.rpm https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm \
+    && zypper --non-interactive install --no-recommends /tmp/google-chrome.rpm \
+    && zypper --non-interactive removerepo google-chrome
 
 # playwright
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
