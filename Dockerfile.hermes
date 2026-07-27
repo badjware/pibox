@@ -1,0 +1,16 @@
+ARG BASE_IMAGE=pibox:base
+FROM ${BASE_IMAGE}
+
+ARG HERMES_AGENT_VERSION=v2026.7.20
+ARG HERMES_INSTALLER_SHA256=c5ba7e89627577fab914514736ecfb3359b66956ca00199bfef616ca35953cb9
+
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
+    curl --fail --location  --output /tmp/install-hermes.sh \
+        "https://raw.githubusercontent.com/NousResearch/hermes-agent/${HERMES_AGENT_VERSION}/scripts/install.sh" \
+    && echo "${HERMES_INSTALLER_SHA256}  /tmp/install-hermes.sh" | sha256sum --check --strict - \
+    && bash /tmp/install-hermes.sh \
+        --branch "${HERMES_AGENT_VERSION}" \
+        --include-desktop \
+        --skip-setup \
+        --skip-browser \
+        --non-interactive

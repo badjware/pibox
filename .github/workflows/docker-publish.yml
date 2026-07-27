@@ -21,7 +21,7 @@ jobs:
 
     strategy:
       matrix:
-        harness: [pi, claude]
+        harness: [pi, claude, hermes]
 
     steps:
       - name: Checkout repository

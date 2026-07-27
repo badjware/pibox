@@ -2,7 +2,7 @@
 
 ## Overview
 
-pibox wraps AI coding agents (pi, Claude Code) inside a sandboxed Docker container.
+pibox wraps AI coding agents (pi, Claude Code, Hermes Agent) inside a sandboxed Docker container.
 The working directory is bind-mounted into the container so the agent operates on host files with matching UID/GID ownership.
 
 ## Repository layout
@@ -12,6 +12,7 @@ launch.sh                           # main entry point: parses flags, builds/pul
 Dockerfile.base                     # shared base image (Ubuntu + tools)
 Dockerfile.pi                       # extends base; installs @earendil-works/pi-coding-agent and pi-acp
 Dockerfile.claude                   # extends base; installs @anthropic-ai/claude-code
+Dockerfile.hermes                   # extends base; installs hermes-agent
 content/
   image_AGENTS.md                   # AGENTS.md baked into the image at /AGENTS.md (and /CLAUDE.md for claude)
   entrypoint.sh                     # container entrypoint
@@ -22,7 +23,7 @@ content/
 | Flag | Short | Description |
 |---|---|---|
 | `--help` | `-h` | show usage help and exit |
-| `--harness pi\|claude` | `-H` | agent to run (default: `pi`) |
+| `--harness pi\|claude\|hermes` | `-H` | agent to run (default: `pi`) |
 | `--build` | `-b` | build images locally instead of pulling |
 | `--pull` | `-p` | pull latest image before launch |
 | `--unsafe-enable-docker` | (none, intentional) | enable rootless Docker-in-Docker (privileged) |
@@ -63,6 +64,7 @@ When adding new unsafe options, always add a call to the `confirm` helper to pro
 |---|---|---|
 | `pi` | `ghcr.io/badjware/pibox:pi` | `pibox:pi` |
 | `claude` | `ghcr.io/badjware/pibox:claude` | `pibox:claude` |
+| `hermes` | `ghcr.io/badjware/pibox:hermes` | `pibox:hermes` |
 
 Build order when using `--build`: `Dockerfile.base` → `Dockerfile.<harness>`.
 

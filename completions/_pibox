@@ -1,11 +1,11 @@
-#compdef pibox claudebox launch.sh
+#compdef pibox claudebox hermesbox launch.sh
 
 _pibox() {
     _arguments -S \
         '--help[show help text and exit]' \
         '--build[build images locally instead of pulling]' \
         '--pull[pull latest image before launch]' \
-        '--harness[agent to run]:harness:(pi claude)' \
+        '--harness[agent to run]:harness:(pi claude hermes)' \
         '--ephemeral[use a temp workdir]' \
         '--read-only[mount all volumes read-only]' \
         '*--volume[bind-mount an extra volume]:volume:_files' \
