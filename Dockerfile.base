@@ -11,7 +11,7 @@ ARG TRAFILATURA_VERSION=2.1.0
 RUN zypper --non-interactive refresh \
     && zypper --non-interactive dup \
     && zypper --non-interactive install --no-recommends \
-        tini nodejs${NODE_VERSION} npm${NODE_VERSION} python3 python3-pipx go fd ripgrep jq yq bc zip unzip git vim make which diff \
+        tini nodejs${NODE_VERSION} npm${NODE_VERSION} python3 python3-pipx go gcc-c++ fd ripgrep jq yq bc zip unzip git vim make which diff \
         terminfo \
         man man-pages \
         ca-certificates curl \

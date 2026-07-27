@@ -7,6 +7,7 @@ The following directories are bind-mounted read-write at the same absolute path 
 - **Working directory**: the host directory from which docker was run, set as the container's working directory.
 - **`~/.pi`**: pi agent configuration and session data, persisted across runs.
 - **`~/.claude`**: Claude Code agent configuration and session data, persisted across runs.
+- **`~/.hermes`**: Hermes Agent configuration, credentials, skills, and sessions, persisted across runs.
 
 ## Available CLI tools
 Pre-installed:
