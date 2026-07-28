@@ -1,7 +1,8 @@
 ARG BASE_IMAGE=pibox:base
 FROM ${BASE_IMAGE}
 
-COPY content/hermes-import-pi-models.py /usr/local/bin/hermes-import-pi-models
+COPY hermes/hermes-import-pi-models.py /usr/local/bin/hermes-import-pi-models
+COPY hermes/disable-dashboard-auth.patch /tmp/disable-dashboard-auth.patch
 
 ARG HERMES_AGENT_VERSION=v2026.7.20
 ARG HERMES_INSTALLER_SHA256=c5ba7e89627577fab914514736ecfb3359b66956ca00199bfef616ca35953cb9
@@ -14,7 +15,7 @@ ENV HERMES_DISABLE_LAZY_INSTALLS=1
 EXPOSE 9119
 
 RUN zypper --non-interactive refresh \
-    && zypper --non-interactive install --no-recommends python3-uv \
+    && zypper --non-interactive install --no-recommends python3-uv patch \
     && zypper clean --all
 
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
@@ -26,6 +27,11 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
         --skip-setup \
         --skip-browser \
         --non-interactive
+
+# Patch out the requirement to have auth configured if binding to a non-loopback address.
+RUN patch --batch --forward --fuzz=0 --reject-file=- \
+        /usr/local/lib/hermes-agent/hermes_cli/web_server.py \
+        < /tmp/disable-dashboard-auth.patch
 
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     cd /usr/local/lib/hermes-agent \

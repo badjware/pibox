@@ -19,12 +19,13 @@ Options:
   -h, --help                    show this help text and exit
   -H, --harness pi|claude|hermes
                                 agent to run (default: pi)
-  -b, --build                   build images locally instead of pulling
-  -p, --pull                    pull latest image before launch
+      --build                   build images locally instead of pulling
+      --pull                    pull latest image before launch
   -e, --ephemeral, --tmp        use a temp workdir
   -r, --read-only, --ro         mount all volumes read-only
   -v, --volume VOLUME           bind-mount an extra volume (repeatable)
   -P, --extra-package PACKAGE   install an extra apt package at startup (repeatable)
+  -p, --port PORT               publish a container port (repeatable; Docker -p syntax)
       --unsafe-enable-docker    enable rootless Docker-in-Docker (privileged)
       --unsafe-enable-aws       mount ~/.aws into the container
       --unsafe-enable-kube      mount ~/.kube into the container
@@ -61,7 +62,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o 'hbperH:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-net,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,acp,sac-moe-patience' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'hp:erH:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-net,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,port:,acp,sac-moe-patience' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
@@ -78,17 +79,18 @@ acp=0
 skip_confirm=0
 volumes=()
 extra_packages=()
+ports=()
 while true; do
     case "$1" in
         -h|--help)
             usage
             exit 0
             ;;
-        -b|--build)
+        --build)
             build=1
             shift
             ;;
-        -p|--pull)
+        --pull)
             pull=1
             shift
             ;;
@@ -132,6 +134,10 @@ while true; do
             extra_packages+=("$2")
             shift 2
             ;;
+        -p|--port)
+            ports+=("$2")
+            shift 2
+            ;;
         --acp)
             acp=1
             shift
@@ -159,6 +165,14 @@ fi
 [[ "$enable_kube" -eq 1 ]] && confirm "--unsafe-enable-kube mounts ~/.kube into the container"
 [[ "$forward_wayland" -eq 1 ]] && confirm "--unsafe-host-wayland mounts the Wayland socket into the container"
 [[ "$net_host" -eq 1 ]] && confirm "--unsafe-host-net shares the host network namespace"
+for port in "${ports[@]}"; do
+    confirm "--port publishes $port on the host"
+done
+
+if [[ "$net_host" -eq 1 && "${#ports[@]}" -gt 0 ]]; then
+    echo "$0: --port cannot be used with --unsafe-host-net" >&2
+    exit 2
+fi
 
 # ensure host dirs exist before bind-mounting so docker doesn't create them as root
 [[ "$enable_aws" -eq 1 ]] && mkdir -p "$HOME/.aws"
@@ -247,6 +261,10 @@ fi
 if [[ "$net_host" -eq 1 ]]; then
     docker_extra_args+=("--network=host")
 fi
+
+for port in "${ports[@]}"; do
+    docker_extra_args+=("-p" "$port")
+done
 
 if [[ "$forward_wayland" -eq 1 ]]; then
     if [[ -z "${WAYLAND_DISPLAY:-}" ]]; then

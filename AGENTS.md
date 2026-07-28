@@ -13,7 +13,7 @@ Dockerfile.base                     # shared base image (Ubuntu + tools)
 Dockerfile.pi                       # extends base; installs @earendil-works/pi-coding-agent and pi-acp
 Dockerfile.claude                   # extends base; installs @anthropic-ai/claude-code
 Dockerfile.hermes                   # extends base; installs hermes-agent
-content/
+common/
   image_AGENTS.md                   # AGENTS.md baked into the image at /AGENTS.md (and /CLAUDE.md for claude)
   entrypoint.sh                     # container entrypoint
 ```
@@ -24,8 +24,8 @@ content/
 |---|---|---|
 | `--help` | `-h` | show usage help and exit |
 | `--harness pi\|claude\|hermes` | `-H` | agent to run (default: `pi`) |
-| `--build` | `-b` | build images locally instead of pulling |
-| `--pull` | `-p` | pull latest image before launch |
+| `--build` | | build images locally instead of pulling |
+| `--pull` | | pull latest image before launch |
 | `--unsafe-enable-docker` | (none, intentional) | enable rootless Docker-in-Docker (privileged) |
 | `--unsafe-enable-aws` | (none, intentional) | mount `~/.aws` into the container (awscli is pre-installed) |
 | `--unsafe-enable-kube` | (none, intentional) | mount `~/.kube` into the container (kubectl is pre-installed) |
@@ -35,6 +35,7 @@ content/
 | `--read-only`, `--ro` | `-r` | mount all volumes read-only |
 | `--volume` | `-v` | bind-mount an extra volume (repeatable; same syntax as `docker run -v`) |
 | `--extra-package` | `-P` | install an extra apt package at container startup (repeatable; non-persistent) |
+| `--port` | `-p` | publish a container port (repeatable; Docker `-p` syntax) |
 | `--acp` | (none) | run the `pi-acp` adapter instead of `pi`, exposing ACP (JSON-RPC 2.0 over stdio) for editors like Zed. Implies `-i` (no TTY) on `docker run`. Only valid with `--harness pi`. |
 | `--` | | remaining args forwarded to the agent inside the container |
 
@@ -68,7 +69,7 @@ When adding new unsafe options, always add a call to the `confirm` helper to pro
 
 Build order when using `--build`: `Dockerfile.base` → `Dockerfile.<harness>`.
 
-## content/image_AGENTS.md
+## common/image_AGENTS.md
 
 Baked into every image as `/AGENTS.md` (and `/CLAUDE.md` for the claude image).
 This is the file that agents inside the container read to understand the runtime environment.

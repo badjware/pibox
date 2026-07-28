@@ -5,4 +5,4 @@ ARG CLAUDE_CODE_VERSION=2.1.209
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 
-COPY content/image_AGENTS.md /CLAUDE.md
+COPY common/image_AGENTS.md /CLAUDE.md

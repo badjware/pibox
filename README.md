@@ -61,8 +61,8 @@ alias hermesbox='/path/to/pibox/launch.sh --harness hermes'
 | ------------------------------ | ----- | ------------------------------------------------------------------------------------------------- |
 | `--help`                       | `-h`  | Show usage help and exit.                                                                         |
 | `--harness pi\|claude\|hermes` | `-H`  | Choose the agent to run. Defaults to `pi`.                                                        |
-| `--build`                      | `-b`  | Build the image locally from the Dockerfiles instead of using the published image.                |
-| `--pull`                       | `-p`  | Update the image prior to launching.                                                              |
+| `--build`                      |       | Build the image locally from the Dockerfiles instead of using the published image.                |
+| `--pull`                       |       | Update the image prior to launching.                                                              |
 | `--unsafe-enable-docker`       |       | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers. |
 | `--unsafe-enable-aws`          |       | Mount `~/.aws` into the container.                                                                |
 | `--unsafe-enable-kube`         |       | Mount `~/.kube` into the container.                                                               |
@@ -72,6 +72,7 @@ alias hermesbox='/path/to/pibox/launch.sh --harness hermes'
 | `--read-only`, `--ro`          | `-r`  | Mount all volumes as read-only inside the container.                                              |
 | `--volume <spec>`              | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                          |
 | `--extra-package <name>`       | `-P`  | Install an extra apt package at container startup. Repeatable and non-persistent.                 |
+| `--port <spec>`                | `-p`  | Publish a container port. Repeatable, using Docker `-p` syntax such as `9119:9119`.                |
 | `--acp`                        |       | Run an ACP adapter instead of the TUI. Only valid with `--harness pi`.                            |
 
 Any arguments after `--` are passed through to the agent inside the container.
@@ -95,6 +96,16 @@ Launch Hermes Agent:
 ```sh
 ./launch.sh --harness hermes
 ```
+
+Launch the Hermes dashboard with port 9119 published:
+
+```sh
+./launch.sh --harness hermes --port 9119:9119 -- dashboard
+```
+
+The Hermes dashboard defaults to `0.0.0.0` and does not open a browser in the
+container. Hermes requires a dashboard authentication provider for this
+non-loopback bind.
 
 Pass arguments through to the agent (everything after `--` is forwarded):
 

@@ -10,6 +10,7 @@ _pibox() {
         '--read-only[mount all volumes read-only]' \
         '*--volume[bind-mount an extra volume]:volume:_files' \
         '*--extra-package[install an extra apt package at startup]:package:' \
+        '*--port[publish a container port (Docker -p syntax)]:port:' \
         '--unsafe-enable-docker[enable rootless Docker-in-Docker (privileged)]' \
         '--unsafe-enable-aws[mount ~/.aws into the container]' \
         '--unsafe-enable-kube[mount ~/.kube into the container]' \
