@@ -27,10 +27,9 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
         --skip-browser \
         --non-interactive
 
-# dashboard and TUI assets
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     cd /usr/local/lib/hermes-agent \
-    && npm install --workspace web --workspace ui-tui --include=dev --no-audit \
+    && npm ci --include=dev --no-audit \
     && npm run build --workspace web \
     && npm run build --workspace ui-tui \
     && npm cache clean --force
