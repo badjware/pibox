@@ -100,6 +100,23 @@ case "$HARNESS" in
     hermes)
         export HERMES_LAZY_INSTALL_TARGET="$USER_HOME/.cache/hermes/packages"
 
+        if [[ "${1:-}" == "dashboard" ]]; then
+            dashboard_has_host=0
+            dashboard_has_no_open=0
+            for arg in "$@"; do
+                case "$arg" in
+                    --host|--host=*) dashboard_has_host=1 ;;
+                    --no-open) dashboard_has_no_open=1 ;;
+                esac
+            done
+            if [[ "$dashboard_has_host" -eq 0 ]]; then
+                set -- dashboard --host 0.0.0.0 "${@:2}"
+            fi
+            if [[ "$dashboard_has_no_open" -eq 0 ]]; then
+                set -- "$@" --no-open
+            fi
+        fi
+
         hermes-import-pi-models --home "$USER_HOME" --output /etc/hermes/config.yaml --env-output /etc/hermes/.env
 
         exec runuser -u "$HOST_USER" -- env \

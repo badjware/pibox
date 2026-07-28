@@ -1,0 +1,5 @@
+--- a/hermes_cli/web_server.py
++++ b/hermes_cli/web_server.py
+@@ -419 +419 @@ def should_require_auth(host: str, allow_public: bool = False) -> bool:
+-    return host not in _LOOPBACK_HOST_VALUES
++    return False
