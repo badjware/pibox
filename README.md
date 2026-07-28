@@ -20,6 +20,7 @@ Three harnesses are supported:
 - **Sandboxed execution**: the agent runs inside a container with an ephemeral filesystem.
 - **Host-user mirroring**: files written from inside the container are owned by your host user.
 - **Persistent config**: `~/.pi`, `~/.claude`, and `~/.hermes` are bind-mounted so settings and sessions survive between runs.
+- **Hermes model import**: on launch, the Hermes harness converts Pi's cached model catalogs and referenced credentials into container-managed providers without modifying `~/.hermes/config.yaml`.
 - **Optional rootless Docker-in-Docker**: opt in with `--unsafe-enable-docker` when the agent needs to run containers itself.
 - **Pre-built images**: distributed via GitHub Container Registry.
 

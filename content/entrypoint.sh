@@ -121,6 +121,9 @@ case "$HARNESS" in
     pi)     exec runuser -u "$HOST_USER" -- pi "$@" ;;
     pi-acp) exec runuser -u "$HOST_USER" -- pi-acp "$@" ;;
     claude) exec runuser -u "$HOST_USER" -- claude --trust --dangerously-skip-permissions "$@" ;;
-    hermes) exec runuser -u "$HOST_USER" -- hermes "$@" ;;
+    hermes)
+        hermes-import-pi-models --home "$USER_HOME" --output /etc/hermes/config.yaml --env-output /etc/hermes/.env
+        exec runuser -u "$HOST_USER" -- env HOME="$USER_HOME" HERMES_MANAGED_DIR=/etc/hermes hermes "$@"
+        ;;
     *)      echo "entrypoint: unknown HARNESS: $HARNESS" >&2; exit 2 ;;
 esac

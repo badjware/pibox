@@ -1,6 +1,8 @@
 ARG BASE_IMAGE=pibox:base
 FROM ${BASE_IMAGE}
 
+COPY content/hermes-import-pi-models.py /usr/local/bin/hermes-import-pi-models
+
 ARG HERMES_AGENT_VERSION=v2026.7.20
 ARG HERMES_INSTALLER_SHA256=c5ba7e89627577fab914514736ecfb3359b66956ca00199bfef616ca35953cb9
 
