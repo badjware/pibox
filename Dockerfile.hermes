@@ -10,7 +10,21 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     && echo "${HERMES_INSTALLER_SHA256}  /tmp/install-hermes.sh" | sha256sum --check --strict - \
     && bash /tmp/install-hermes.sh \
         --branch "${HERMES_AGENT_VERSION}" \
-        --include-desktop \
         --skip-setup \
         --skip-browser \
         --non-interactive
+
+# dashboard mode dependencies
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
+    /root/.hermes/bin/uv pip install \
+        --python /usr/local/lib/hermes-agent/venv/bin/python \
+        --editable '/usr/local/lib/hermes-agent[web,pty]' \
+    && cd /usr/local/lib/hermes-agent \
+    && npm install --workspace web --workspace ui-tui --include=dev --no-audit \
+    && npm run build --workspace web \
+    && npm run build --workspace ui-tui \
+    && npm cache clean --force
+EXPOSE 9119
+ENV HERMES_WEB_DIST=/usr/local/lib/hermes-agent/hermes_cli/web_dist
+ENV HERMES_TUI_DIR=/usr/local/lib/hermes-agent/ui-tui
+ENV HERMES_DISABLE_LAZY_INSTALLS=1
