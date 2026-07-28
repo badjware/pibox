@@ -89,14 +89,22 @@ if [[ -n "${EXTRA_PACKAGES:-}" ]]; then
     zypper clean --all
 fi
 
+# Ensure cache directory exists and is owned by the host user
+install -d -o "$HOST_UID" -g "$HOST_GID" "$USER_HOME/.cache"
+
 # Drop root privileges and run the chosen harness as the host user
 case "$HARNESS" in
     pi)     exec runuser -u "$HOST_USER" -- pi "$@" ;;
     pi-acp) exec runuser -u "$HOST_USER" -- pi-acp "$@" ;;
     claude) exec runuser -u "$HOST_USER" -- claude --trust --dangerously-skip-permissions "$@" ;;
     hermes)
+        export HERMES_LAZY_INSTALL_TARGET="$USER_HOME/.cache/hermes/packages"
+
         hermes-import-pi-models --home "$USER_HOME" --output /etc/hermes/config.yaml --env-output /etc/hermes/.env
-        exec runuser -u "$HOST_USER" -- env HOME="$USER_HOME" HERMES_MANAGED_DIR=/etc/hermes hermes "$@"
+
+        exec runuser -u "$HOST_USER" -- env \
+            HERMES_LAZY_INSTALL_TARGET="$HERMES_LAZY_INSTALL_TARGET" \
+            hermes "$@"
         ;;
     *)      echo "entrypoint: unknown HARNESS: $HARNESS" >&2; exit 2 ;;
 esac

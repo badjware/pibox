@@ -6,6 +6,17 @@ COPY content/hermes-import-pi-models.py /usr/local/bin/hermes-import-pi-models
 ARG HERMES_AGENT_VERSION=v2026.7.20
 ARG HERMES_INSTALLER_SHA256=c5ba7e89627577fab914514736ecfb3359b66956ca00199bfef616ca35953cb9
 
+ENV HERMES_MANAGED_DIR=/etc/hermes
+ENV HERMES_WEB_DIST=/usr/local/lib/hermes-agent/hermes_cli/web_dist
+ENV HERMES_TUI_DIR=/usr/local/lib/hermes-agent/ui-tui
+ENV HERMES_DISABLE_LAZY_INSTALLS=1
+
+EXPOSE 9119
+
+RUN zypper --non-interactive refresh \
+    && zypper --non-interactive install --no-recommends python3-uv \
+    && zypper clean --all
+
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     curl --fail --location  --output /tmp/install-hermes.sh \
         "https://raw.githubusercontent.com/NousResearch/hermes-agent/${HERMES_AGENT_VERSION}/scripts/install.sh" \
@@ -16,17 +27,10 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
         --skip-browser \
         --non-interactive
 
-# dashboard mode dependencies
+# dashboard and TUI assets
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
-    /root/.hermes/bin/uv pip install \
-        --python /usr/local/lib/hermes-agent/venv/bin/python \
-        --editable '/usr/local/lib/hermes-agent[web,pty]' \
-    && cd /usr/local/lib/hermes-agent \
+    cd /usr/local/lib/hermes-agent \
     && npm install --workspace web --workspace ui-tui --include=dev --no-audit \
     && npm run build --workspace web \
     && npm run build --workspace ui-tui \
     && npm cache clean --force
-EXPOSE 9119
-ENV HERMES_WEB_DIST=/usr/local/lib/hermes-agent/hermes_cli/web_dist
-ENV HERMES_TUI_DIR=/usr/local/lib/hermes-agent/ui-tui
-ENV HERMES_DISABLE_LAZY_INSTALLS=1
