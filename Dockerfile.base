@@ -12,6 +12,7 @@ RUN zypper --non-interactive refresh \
     && zypper --non-interactive dup \
     && zypper --non-interactive install --no-recommends \
         tini nodejs${NODE_VERSION} npm${NODE_VERSION} python3 python3-pipx go gcc-c++ fd ripgrep jq yq bc zip unzip git vim make which diff \
+        chromium qt6-wayland \
         terminfo \
         man man-pages \
         ca-certificates curl \
@@ -32,12 +33,6 @@ RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc \
 COPY --from=awscli /usr/local/aws-cli /usr/local/aws-cli
 RUN ln -sf /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws
 
-# google-chrome
-RUN rpm --import https://dl.google.com/linux/linux_signing_key.pub \
-    && curl --fail --location --output /tmp/google-chrome.rpm https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm \
-    && zypper --non-interactive install --no-recommends /tmp/google-chrome.rpm \
-    && zypper --non-interactive removerepo google-chrome
-
 # playwright
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     npm install -g patchright@${PLAYWRIGHT_VERSION}
@@ -56,8 +51,8 @@ RUN zypper --non-interactive remove -y --clean-deps sudo openssh openssh-clients
 
 COPY content/image_AGENTS.md /AGENTS.md
 COPY content/entrypoint.sh /entrypoint.sh
-COPY content/google-chrome /usr/local/bin/google-chrome
-COPY content/chrome-policies/pibox.json /etc/opt/chrome/policies/managed/pibox.json
+COPY content/chromium /usr/local/bin/chromium
+COPY content/chrome-policies/pibox.json /etc/chromium/policies/managed/pibox.json
 
 WORKDIR /
 
