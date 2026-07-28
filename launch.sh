@@ -345,6 +345,20 @@ if [[ -z "$host_tz" && -L /etc/localtime ]]; then
     host_tz="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
 fi
 
+pi_credential_env_args=()
+if [[ "$harness" == "hermes" ]]; then
+    declare -A pi_credential_names
+    for model_file in "$HOME/.pi/agent/models-store.json" "$HOME/.pi/agent/models.json"; do
+        [[ -f "$model_file" ]] || continue
+        while IFS= read -r name; do
+            pi_credential_names["$name"]=1
+        done < <(grep -hoE '\$\{?[A-Za-z_][A-Za-z0-9_]*\}?' "$model_file" | sed -E 's/^\$\{?//; s/\}?$//' | sort -u)
+    done
+    for name in "${!pi_credential_names[@]}"; do
+        [[ -v "$name" ]] && pi_credential_env_args+=("-e" "$name")
+    done
+fi
+
 exec docker run --rm \
     -e "TZ=${host_tz}" \
     -e "COLORTERM=${COLORTERM}" \
@@ -363,6 +377,7 @@ exec docker run --rm \
     -e "ANTHROPIC_CUSTOM_HEADERS=${ANTHROPIC_CUSTOM_HEADERS}" \
     -e "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=${CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS}" \
     -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
+    "${pi_credential_env_args[@]}" \
     -w "$WORKDIR" \
     --ipc=none \
     --pids-limit=1024 \
