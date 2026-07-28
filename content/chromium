@@ -3,7 +3,7 @@
 ua_flag=
 for arg in "$@"; do
     case "$arg" in
-        --headless*) echo "google-chrome: headless mode is not allowed" >&2; exit 1 ;;
+        --headless*) echo "chromium: headless mode is not allowed" >&2; exit 1 ;;
         --user-agent*) ua_flag=1 ;;
     esac
 done
@@ -12,9 +12,8 @@ if [ -z "$ua_flag" ] && [ -n "$CHROME_USER_AGENT" ]; then
     set -- --user-agent="$CHROME_USER_AGENT" "$@"
 fi
 
-exec /opt/google/chrome/google-chrome \
-    --enable-features=UseOzonePlatform ---ozone-platform=wayland \
-    --disable-features=PasswordManager \
+exec /usr/bin/chromium \
+    --ozone-platform=wayland \
     --disable-gpu \
     --disable-software-rasterizer \
     --disable-dev-shm-usage \
