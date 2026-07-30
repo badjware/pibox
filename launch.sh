@@ -300,6 +300,12 @@ _vol_register() {
     # Extract container destination: strip leading "src:" then trailing ":opts"
     local dest="${spec#*:}"
     dest="${dest%%:*}"
+    while [[ "$dest" == *//* ]]; do
+        dest="${dest//\/\//\/}"
+    done
+    while [[ "$dest" == */ && "$dest" != "/" ]]; do
+        dest="${dest%/}"
+    done
     [[ -z "${_vol_map[$dest]+x}" ]] && _vol_keys+=("$dest")
     _vol_map[$dest]="$spec"
 }
