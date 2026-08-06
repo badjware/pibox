@@ -95,7 +95,6 @@ install -d -o "$HOST_UID" -g "$HOST_GID" "$USER_HOME/.cache"
 # Drop root privileges and run the chosen harness as the host user
 case "$HARNESS" in
     pi)     exec runuser -u "$HOST_USER" -- pi "$@" ;;
-    pi-acp) exec runuser -u "$HOST_USER" -- pi-acp "$@" ;;
     claude) exec runuser -u "$HOST_USER" -- claude --trust --dangerously-skip-permissions "$@" ;;
     hermes)
         export HERMES_LAZY_INSTALL_TARGET="$USER_HOME/.cache/hermes/packages"

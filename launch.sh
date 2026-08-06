@@ -31,7 +31,6 @@ Options:
       --unsafe-enable-kube      mount ~/.kube into the container
       --unsafe-host-wayland     mount the Wayland socket into the container
       --unsafe-host-net         share the host network namespace
-      --acp                     run the pi-acp adapter instead of pi (pi harness only)
 
 Anything after -- is forwarded to the agent inside the container.
 EOF
@@ -62,7 +61,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o 'hp:erH:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-net,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,port:,acp,sac-moe-patience' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'hp:erH:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-net,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,port:,sac-moe-patience' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
@@ -75,7 +74,6 @@ net_host=0
 ephemeral=0
 read_only=""
 harness="pi"
-acp=0
 skip_confirm=0
 volumes=()
 extra_packages=()
@@ -138,10 +136,6 @@ while true; do
             ports+=("$2")
             shift 2
             ;;
-        --acp)
-            acp=1
-            shift
-            ;;
         --sac-moe-patience)
             skip_confirm=1
             shift
@@ -160,7 +154,7 @@ if [[ "$HOST_UID" -eq 0 ]]; then
 fi
 
 # warn about active unsafe options
-[[ "$enable_docker" -eq 1 && "$acp" -ne 1 ]] && confirm "--unsafe-enable-docker enables privileged mode"
+[[ "$enable_docker" -eq 1 ]] && confirm "--unsafe-enable-docker enables privileged mode"
 [[ "$enable_aws" -eq 1 ]] && confirm "--unsafe-enable-aws mounts ~/.aws into the container"
 [[ "$enable_kube" -eq 1 ]] && confirm "--unsafe-enable-kube mounts ~/.kube into the container"
 [[ "$forward_wayland" -eq 1 ]] && confirm "--unsafe-host-wayland mounts the Wayland socket into the container"
@@ -181,12 +175,6 @@ fi
 # remaining arguments are passed through to pi inside the container
 harness_args=("$@")
 
-# --acp is only supported with the pi harness (uses pi-acp adapter).
-if [[ "$acp" -eq 1 && "$harness" != "pi" ]]; then
-    echo "$0: --acp is only supported with --harness pi" >&2
-    exit 2
-fi
-
 # ephemeral mode: use a tmp workdir
 if [[ "$ephemeral" -eq 1 ]]; then
     tmpworkdir=$(mktemp -d)
@@ -205,11 +193,8 @@ case "$harness" in
     *)      echo "$0: unknown --harness value: $harness" >&2; exit 2 ;;
 esac
 
-# In ACP mode, the in-container harness is pi-acp (not pi).
-[[ "$acp" -eq 1 ]] && harness="pi-acp"
-
 # save sessions alongside the original workdir when running in ephemeral mode on pi
-if [[ "$ephemeral" -eq 1 && "$harness" =~ ^pi ]]; then
+if [[ "$ephemeral" -eq 1 && "$harness" == "pi" ]]; then
     if [[ ! " ${harness_args[*]} " =~ " --session-dir " ]]; then
         session_dir="$WORKDIR/.pi/sessions"
         mkdir -p "$session_dir"
@@ -355,12 +340,7 @@ for dest in "${_vol_keys[@]}"; do
     docker_extra_args+=("-v" "${_vol_map[$dest]}")
 done
 
-# In ACP mode, the editor (e.g. Zed) speaks JSON-RPC 2.0 over stdio to the
-# spawned process. We must attach stdin (-i) but never allocate a TTY (-t),
-# which would wrap stdout in a PTY and corrupt JSON-RPC framing.
-if [[ "$acp" -eq 1 ]]; then
-    docker_extra_args+=("-i")
-elif [[ -t 0 && -t 1 ]]; then
+if [[ -t 0 && -t 1 ]]; then
     docker_extra_args+=("-it")
 fi
 

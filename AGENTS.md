@@ -10,7 +10,7 @@ The working directory is bind-mounted into the container so the agent operates o
 ```
 launch.sh                           # main entry point: parses flags, builds/pulls image, runs container
 Dockerfile.base                     # shared base image (Ubuntu + tools)
-Dockerfile.pi                       # extends base; installs @earendil-works/pi-coding-agent and pi-acp
+Dockerfile.pi                       # extends base; installs @earendil-works/pi-coding-agent
 Dockerfile.claude                   # extends base; installs @anthropic-ai/claude-code
 Dockerfile.hermes                   # extends base; installs hermes-agent
 common/
@@ -36,7 +36,6 @@ common/
 | `--volume` | `-v` | bind-mount an extra volume (repeatable; same syntax as `docker run -v`) |
 | `--extra-package` | `-P` | install an extra apt package at container startup (repeatable; non-persistent) |
 | `--port` | `-p` | publish a container port (repeatable; Docker `-p` syntax) |
-| `--acp` | (none) | run the `pi-acp` adapter instead of `pi`, exposing ACP (JSON-RPC 2.0 over stdio) for editors like Zed. Implies `-i` (no TTY) on `docker run`. Only valid with `--harness pi`. |
 | `--` | | remaining args forwarded to the agent inside the container |
 
 Unsafe options (`--unsafe-*`) intentionally have no short form to reduce the risk of accidental use.
