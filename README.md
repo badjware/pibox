@@ -73,7 +73,6 @@ alias hermesbox='/path/to/pibox/launch.sh --harness hermes'
 | `--volume <spec>`              | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                          |
 | `--extra-package <name>`       | `-P`  | Install an extra apt package at container startup. Repeatable and non-persistent.                 |
 | `--port <spec>`                | `-p`  | Publish a container port. Repeatable, using Docker `-p` syntax such as `9119:9119`.                |
-| `--acp`                        |       | Run an ACP adapter instead of the TUI. Only valid with `--harness pi`.                            |
 
 Any arguments after `--` are passed through to the agent inside the container.
 
@@ -134,31 +133,6 @@ A zsh completion is provided at `completions/_pibox`. To enable it, add the
 fpath=(/path/to/pibox/completions $fpath)
 autoload -U compinit && compinit
 ```
-
-## ACP
-
-With `--acp`, pibox runs the [`pi-acp`](https://github.com/svkozak/pi-acp)
-adapter inside the container instead of the interactive `pi` TUI. The adapter
-speaks the [Agent Client Protocol](https://agentclientprotocol.com/) over
-stdio, so any ACP-capable editor can spawn `launch.sh --acp` as a child
-process and talk to pi through it.
-
-Example Zed `settings.json`:
-
-```json
-{
-  "agent_servers": {
-    "pibox": {
-      "type": "custom",
-      "command": "/path/to/pibox/launch.sh",
-      "args": ["--acp"],
-      "env": {}
-    }
-  }
-}
-```
-
-Claude Code is not supported with `--acp`.
 
 ## Environment variables
 
