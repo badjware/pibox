@@ -1,7 +1,7 @@
 ARG BASE_IMAGE=pibox:base
 FROM ${BASE_IMAGE}
 
-ARG PI_CODING_AGENT_VERSION=0.84.1
+ARG PI_CODING_AGENT_VERSION=0.84.2
 
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     npm install -g \
