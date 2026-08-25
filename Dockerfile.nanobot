@@ -1,0 +1,8 @@
+ARG BASE_IMAGE=pibox:pi
+FROM ${BASE_IMAGE}
+
+ARG NANOBOT_VERSION=0.3.0
+
+RUN pipx install nanobot-ai==${NANOBOT_VERSION}
+
+COPY nanobot/pi_provider_bridge.py /usr/local/lib/pibox/nanobot_pi_bridge.py

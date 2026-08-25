@@ -7,12 +7,13 @@ executes against your working directory without having unrestricted access to
 your host system. The container mirrors your host user (UID/GID/name) so files
 created inside the container keep consistent ownership on the host.
 
-Two harnesses are supported:
+Three harnesses are supported:
 
-| Harness        | Agent                                                    | Image                           |
-| -------------- | -------------------------------------------------------- | ------------------------------- |
-| `pi` (default) | [pi](https://github.com/badlogic/pi)                     | `ghcr.io/badjware/pibox:pi`     |
-| `claude`       | [Claude Code](https://github.com/anthropics/claude-code) | `ghcr.io/badjware/pibox:claude` |
+| Harness        | Agent                                                    | Image                            |
+| -------------- | -------------------------------------------------------- | -------------------------------- |
+| `pi` (default) | [pi](https://github.com/badlogic/pi)                     | `ghcr.io/badjware/pibox:pi`      |
+| `claude`       | [Claude Code](https://github.com/anthropics/claude-code) | `ghcr.io/badjware/pibox:claude`  |
+| `nanobot`      | [nanobot](https://github.com/HKUDS/nanobot)              | `ghcr.io/badjware/pibox:nanobot` |
 
 ## Features
 
@@ -54,22 +55,23 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 
 ### Flags
 
-| Flag                           | Short | Description                                                                                       |
-| ------------------------------ | ----- | ------------------------------------------------------------------------------------------------- |
-| `--help`                       | `-h`  | Show usage help and exit.                                                                         |
-| `--harness pi\|claude`        | `-H`  | Choose the agent to run. Defaults to `pi`.                                                        |
-| `--build`                      |       | Build the image locally from the Dockerfiles instead of using the published image.                |
-| `--pull`                       |       | Update the image prior to launching.                                                              |
-| `--unsafe-enable-docker`       |       | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers. |
-| `--unsafe-enable-aws`          |       | Mount `~/.aws` into the container.                                                                |
-| `--unsafe-enable-kube`         |       | Mount `~/.kube` into the container.                                                               |
-| `--unsafe-host-wayland`        |       | Mount the Wayland socket into the container and forward Wayland environment variables.            |
-| `--unsafe-host-net`            |       | Share the host network namespace.                                                                 |
-| `--ephemeral`, `--tmp`         | `-e`  | Start in a temporary working directory instead of the current one.                                |
-| `--read-only`, `--ro`          | `-r`  | Mount all volumes as read-only inside the container.                                              |
-| `--volume <spec>`              | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                          |
-| `--extra-package <name>`       | `-P`  | Install an extra apt package at container startup. Repeatable and non-persistent.                 |
-| `--port <spec>`                | `-p`  | Publish a container port. Repeatable, using Docker `-p` syntax such as `9119:9119`.                |
+| Flag                            | Short | Description                                                                                       |
+| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------- |
+| `--help`                        | `-h`  | Show usage help and exit.                                                                         |
+| `--harness pi\|claude\|nanobot` | `-H`  | Choose the agent to run. Defaults to `pi`.                                                        |
+| `--build`                       |       | Build the image locally from the Dockerfiles instead of using the published image.                |
+| `--pull`                        |       | Update the image prior to launching.                                                              |
+| `--unsafe-enable-docker`        |       | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers. |
+| `--unsafe-enable-aws`           |       | Mount `~/.aws` into the container.                                                                |
+| `--unsafe-enable-kube`          |       | Mount `~/.kube` into the container.                                                               |
+| `--unsafe-host-wayland`         |       | Mount the Wayland socket into the container and forward Wayland environment variables.            |
+| `--unsafe-host-net`             |       | Share the host network namespace.                                                                 |
+| `--enable-pi-provider-bridge`   |       | Configure nanobot's models from explicitly configured pi providers. Requires `--harness nanobot`. |
+| `--ephemeral`, `--tmp`          | `-e`  | Start in a temporary working directory instead of the current one.                                |
+| `--read-only`, `--ro`           | `-r`  | Mount all volumes as read-only inside the container.                                              |
+| `--volume <spec>`               | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                          |
+| `--extra-package <name>`        | `-P`  | Install an extra apt package at container startup. Repeatable and non-persistent.                 |
+| `--port <spec>`                 | `-p`  | Publish a container port. Repeatable, using Docker `-p` syntax such as `9119:9119`.               |
 
 Any arguments after `--` are passed through to the agent inside the container.
 
@@ -86,6 +88,24 @@ Launch Claude Code:
 ```sh
 ./launch.sh --harness claude
 ```
+
+Launch nanobot with its own configuration:
+
+```sh
+./launch.sh --harness nanobot
+```
+
+Launch nanobot using models explicitly configured in pi:
+
+```sh
+./launch.sh --harness nanobot --enable-pi-provider-bridge
+```
+
+The bridge reads `~/.pi/agent/models.json`, imports only those providers' models
+that `pi --offline --list-models` reports as available, and resolves API keys
+through `pi auth`. It writes `~/.nanobot/pibox-config.json` with owner-only
+permissions and leaves `~/.nanobot/config.json` unchanged. OAuth providers and
+providers nanobot cannot represent are skipped.
 
 Pass arguments through to the agent (everything after `--` is forwarded):
 
@@ -152,4 +172,5 @@ These paths are always bind-mounted.
 | current working directory | same absolute path | rw   |
 | `~/.pi`                   | `~/.pi`            | rw   |
 | `~/.claude`               | `~/.claude`        | rw   |
+| `~/.nanobot`              | `~/.nanobot`       | rw   |
 | `~/.gitconfig`            | `~/.gitconfig`     | ro   |

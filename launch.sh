@@ -31,6 +31,8 @@ Options:
       --unsafe-enable-kube      mount ~/.kube into the container
       --unsafe-host-wayland     mount the Wayland socket into the container
       --unsafe-host-net         share the host network namespace
+      --enable-pi-provider-bridge
+                                configure nanobot models from pi
 
 Anything after -- is forwarded to the agent inside the container.
 EOF
@@ -51,6 +53,7 @@ confirm() {
 mkdir -p "$HOME/.pi"
 mkdir -p "$HOME/.pi/agent/extensions"
 mkdir -p "$HOME/.claude/project"
+mkdir -p "$HOME/.nanobot"
 touch "$HOME/.claude.json"
 
 docker_extra_args=()
@@ -60,7 +63,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o 'hp:erH:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-net,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,port:,sac-moe-patience' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'hp:erH:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-net,enable-pi-provider-bridge,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,port:,sac-moe-patience' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
@@ -70,6 +73,7 @@ enable_aws=0
 enable_kube=0
 forward_wayland=0
 net_host=0
+enable_pi_provider_bridge=0
 ephemeral=0
 read_only=""
 harness="pi"
@@ -109,6 +113,10 @@ while true; do
             ;;
         --unsafe-host-net)
             net_host=1
+            shift
+            ;;
+        --enable-pi-provider-bridge)
+            enable_pi_provider_bridge=1
             shift
             ;;
         -e|--ephemeral|--tmp)
@@ -187,8 +195,15 @@ case "$harness" in
             LOCAL_IMAGE="pibox:pi" ;;
     claude) REMOTE_IMAGE="ghcr.io/badjware/pibox:claude"
             LOCAL_IMAGE="pibox:claude" ;;
+    nanobot) REMOTE_IMAGE="ghcr.io/badjware/pibox:nanobot"
+            LOCAL_IMAGE="pibox:nanobot" ;;
     *)      echo "$0: unknown --harness value: $harness" >&2; exit 2 ;;
 esac
+
+if [[ "$enable_pi_provider_bridge" -eq 1 && "$harness" != "nanobot" ]]; then
+    echo "$0: --enable-pi-provider-bridge requires --harness nanobot" >&2
+    exit 2
+fi
 
 # save sessions alongside the original workdir when running in ephemeral mode on pi
 if [[ "$ephemeral" -eq 1 && "$harness" == "pi" ]]; then
@@ -208,8 +223,15 @@ if [[ "$build" -eq 1 ]]; then
     fi
     docker build --pull -t pibox:base -f "$SCRIPT_DIR/Dockerfile.base" \
         "${npmrc_secret_args[@]}" "$SCRIPT_DIR"
-    docker build -t "$IMAGE_NAME" -f "$SCRIPT_DIR/Dockerfile.$harness" --build-arg BASE_IMAGE=pibox:base \
-        "${npmrc_secret_args[@]}" "$SCRIPT_DIR"
+    if [[ "$harness" == "nanobot" ]]; then
+        docker build -t pibox:pi -f "$SCRIPT_DIR/Dockerfile.pi" --build-arg BASE_IMAGE=pibox:base \
+            "${npmrc_secret_args[@]}" "$SCRIPT_DIR"
+        docker build -t "$IMAGE_NAME" -f "$SCRIPT_DIR/Dockerfile.nanobot" --build-arg BASE_IMAGE=pibox:pi \
+            "${npmrc_secret_args[@]}" "$SCRIPT_DIR"
+    else
+        docker build -t "$IMAGE_NAME" -f "$SCRIPT_DIR/Dockerfile.$harness" --build-arg BASE_IMAGE=pibox:base \
+            "${npmrc_secret_args[@]}" "$SCRIPT_DIR"
+    fi
 else
     IMAGE_NAME="$REMOTE_IMAGE"
     if [[ "$pull" -eq 1 ]]; then
@@ -298,6 +320,7 @@ _vol_register "$HOME/.pi/agent/extensions:/home/$HOST_USER/.pi/agent/extensions:
 _vol_register "$HOME/.claude:/home/$HOST_USER/.claude:ro"
 _vol_register "$HOME/.claude/project:/home/$HOST_USER/.claude/project:rw" # claude projects folder is always rw
 _vol_register "$HOME/.claude.json:/home/$HOST_USER/.claude.json:rw" # claude really hates to have its config file read-only
+_vol_register "$HOME/.nanobot:/home/$HOST_USER/.nanobot:rw"
 _vol_register "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro"
 _vol_register "pibox-cache:/home/$HOST_USER/.cache:rw"
 _vol_register "/etc/fonts:/etc/fonts:ro"
@@ -353,6 +376,7 @@ exec docker run --rm \
     -e "HOST_GID=$HOST_GID" \
     -e "HOST_USER=$HOST_USER" \
     -e "HARNESS=$harness" \
+    -e "ENABLE_PI_PROVIDER_BRIDGE=$enable_pi_provider_bridge" \
     -e "EXTRA_PACKAGES=${extra_packages[*]}" \
     ${host_ca:+-e "SSL_CERT_FILE=/etc/ssl/host-ca-bundle.pem"} \
     \
