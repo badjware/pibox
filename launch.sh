@@ -17,7 +17,7 @@ Usage: $0 [options] [-- agent-args...]
 
 Options:
   -h, --help                    show this help text and exit
-  -H, --harness pi|claude|hermes
+  -H, --harness pi|claude
                                 agent to run (default: pi)
       --build                   build images locally instead of pulling
       --pull                    pull latest image before launch
@@ -51,7 +51,6 @@ confirm() {
 mkdir -p "$HOME/.pi"
 mkdir -p "$HOME/.pi/agent/extensions"
 mkdir -p "$HOME/.claude/project"
-mkdir -p "$HOME/.hermes"
 touch "$HOME/.claude.json"
 
 docker_extra_args=()
@@ -188,8 +187,6 @@ case "$harness" in
             LOCAL_IMAGE="pibox:pi" ;;
     claude) REMOTE_IMAGE="ghcr.io/badjware/pibox:claude"
             LOCAL_IMAGE="pibox:claude" ;;
-    hermes) REMOTE_IMAGE="ghcr.io/badjware/pibox:hermes"
-            LOCAL_IMAGE="pibox:hermes" ;;
     *)      echo "$0: unknown --harness value: $harness" >&2; exit 2 ;;
 esac
 
@@ -301,7 +298,6 @@ _vol_register "$HOME/.pi/agent/extensions:/home/$HOST_USER/.pi/agent/extensions:
 _vol_register "$HOME/.claude:/home/$HOST_USER/.claude:ro"
 _vol_register "$HOME/.claude/project:/home/$HOST_USER/.claude/project:rw" # claude projects folder is always rw
 _vol_register "$HOME/.claude.json:/home/$HOST_USER/.claude.json:rw" # claude really hates to have its config file read-only
-_vol_register "$HOME/.hermes:/home/$HOST_USER/.hermes:rw"
 _vol_register "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro"
 _vol_register "pibox-cache:/home/$HOST_USER/.cache:rw"
 _vol_register "/etc/fonts:/etc/fonts:ro"
@@ -349,20 +345,6 @@ if [[ -z "$host_tz" && -L /etc/localtime ]]; then
     host_tz="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
 fi
 
-pi_credential_env_args=()
-if [[ "$harness" == "hermes" ]]; then
-    declare -A pi_credential_names
-    for model_file in "$HOME/.pi/agent/models-store.json" "$HOME/.pi/agent/models.json"; do
-        [[ -f "$model_file" ]] || continue
-        while IFS= read -r name; do
-            pi_credential_names["$name"]=1
-        done < <(grep -hoE '\$\{?[A-Za-z_][A-Za-z0-9_]*\}?' "$model_file" | sed -E 's/^\$\{?//; s/\}?$//' | sort -u)
-    done
-    for name in "${!pi_credential_names[@]}"; do
-        [[ -v "$name" ]] && pi_credential_env_args+=("-e" "$name")
-    done
-fi
-
 exec docker run --rm \
     -e "TZ=${host_tz}" \
     -e "COLORTERM=${COLORTERM}" \
@@ -381,7 +363,6 @@ exec docker run --rm \
     -e "ANTHROPIC_CUSTOM_HEADERS=${ANTHROPIC_CUSTOM_HEADERS}" \
     -e "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=${CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS}" \
     -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
-    "${pi_credential_env_args[@]}" \
     -w "$WORKDIR" \
     --ipc=none \
     --pids-limit=1024 \
