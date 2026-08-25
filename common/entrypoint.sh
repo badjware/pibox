@@ -6,6 +6,7 @@ HOST_GID="${HOST_GID:?HOST_GID environment variable is required}"
 HOST_USER="${HOST_USER:?HOST_USER environment variable is required}"
 ENABLE_DOCKER="${ENABLE_DOCKER:-0}"
 HARNESS="${HARNESS:-pi}"
+ENABLE_PI_PROVIDER_BRIDGE="${ENABLE_PI_PROVIDER_BRIDGE:-0}"
 
 # ---------------------------------------------------------------------------
 # Mirror the host user inside the container so bind-mounted files keep
@@ -96,5 +97,25 @@ install -d -o "$HOST_UID" -g "$HOST_GID" "$USER_HOME/.cache"
 case "$HARNESS" in
     pi)     exec runuser -u "$HOST_USER" -- pi "$@" ;;
     claude) exec runuser -u "$HOST_USER" -- claude --trust --dangerously-skip-permissions "$@" ;;
+    nanobot)
+        if [[ "$ENABLE_PI_PROVIDER_BRIDGE" == "1" ]]; then
+            case "${1:-}" in
+                ""|-h|--help|-v|--version)
+                    exec runuser -u "$HOST_USER" -- env HOME="$USER_HOME" nanobot "$@"
+                    ;;
+            esac
+            for arg in "$@"; do
+                case "$arg" in
+                    -c|--config|--config=*)
+                        echo "entrypoint: --config cannot be used with --enable-pi-provider-bridge" >&2
+                        exit 2
+                        ;;
+                esac
+            done
+            runuser -u "$HOST_USER" -- env HOME="$USER_HOME" python3 /usr/local/lib/pibox/nanobot_pi_bridge.py
+            exec runuser -u "$HOST_USER" -- env HOME="$USER_HOME" nanobot "$@" --config "$USER_HOME/.nanobot/pibox-config.json"
+        fi
+        exec runuser -u "$HOST_USER" -- env HOME="$USER_HOME" nanobot "$@"
+        ;;
     *)      echo "entrypoint: unknown HARNESS: $HARNESS" >&2; exit 2 ;;
 esac

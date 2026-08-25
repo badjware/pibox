@@ -1,11 +1,11 @@
-#compdef pibox claudebox launch.sh
+#compdef pibox claudebox nanobox launch.sh
 
 _pibox() {
     _arguments -S \
         '--help[show help text and exit]' \
         '--build[build images locally instead of pulling]' \
         '--pull[pull latest image before launch]' \
-        '--harness[agent to run]:harness:(pi claude)' \
+        '--harness[agent to run]:harness:(pi claude nanobot)' \
         '--ephemeral[use a temp workdir]' \
         '--read-only[mount all volumes read-only]' \
         '*--volume[bind-mount an extra volume]:volume:_files' \
@@ -16,6 +16,7 @@ _pibox() {
         '--unsafe-enable-kube[mount ~/.kube into the container]' \
         '--unsafe-host-wayland[mount the Wayland socket into the container]' \
         '--unsafe-host-net[share the host network namespace]' \
+        '--enable-pi-provider-bridge[configure nanobot models from pi]' \
         '(-)--[forward remaining args to the agent]:: :_default'
 }
 
