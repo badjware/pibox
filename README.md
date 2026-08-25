@@ -7,20 +7,18 @@ executes against your working directory without having unrestricted access to
 your host system. The container mirrors your host user (UID/GID/name) so files
 created inside the container keep consistent ownership on the host.
 
-Three harnesses are supported:
+Two harnesses are supported:
 
-| Harness        | Agent                                                        | Image                           |
-| -------------- | ------------------------------------------------------------ | ------------------------------- |
-| `pi` (default) | [pi](https://github.com/badlogic/pi)                         | `ghcr.io/badjware/pibox:pi`     |
-| `claude`       | [Claude Code](https://github.com/anthropics/claude-code)     | `ghcr.io/badjware/pibox:claude` |
-| `hermes`       | [Hermes Agent](https://github.com/NousResearch/hermes-agent) | `ghcr.io/badjware/pibox:hermes` |
+| Harness        | Agent                                                    | Image                           |
+| -------------- | -------------------------------------------------------- | ------------------------------- |
+| `pi` (default) | [pi](https://github.com/badlogic/pi)                     | `ghcr.io/badjware/pibox:pi`     |
+| `claude`       | [Claude Code](https://github.com/anthropics/claude-code) | `ghcr.io/badjware/pibox:claude` |
 
 ## Features
 
 - **Sandboxed execution**: the agent runs inside a container with an ephemeral filesystem.
 - **Host-user mirroring**: files written from inside the container are owned by your host user.
-- **Persistent config**: `~/.pi`, `~/.claude`, and `~/.hermes` are bind-mounted so settings and sessions survive between runs.
-- **Hermes model import**: on launch, the Hermes harness converts Pi's cached model catalogs and referenced credentials into container-managed providers without modifying `~/.hermes/config.yaml`.
+- **Persistent config**: `~/.pi` and `~/.claude` are bind-mounted so settings and sessions survive between runs.
 - **Optional rootless Docker-in-Docker**: opt in with `--unsafe-enable-docker` when the agent needs to run containers itself.
 - **Pre-built images**: distributed via GitHub Container Registry.
 
@@ -46,7 +44,6 @@ Set aliases in your shell for convenience:
 ```sh
 alias pibox='/path/to/pibox/launch.sh'
 alias claudebox='/path/to/pibox/launch.sh --harness claude'
-alias hermesbox='/path/to/pibox/launch.sh --harness hermes'
 ```
 
 ## Usage
@@ -60,7 +57,7 @@ alias hermesbox='/path/to/pibox/launch.sh --harness hermes'
 | Flag                           | Short | Description                                                                                       |
 | ------------------------------ | ----- | ------------------------------------------------------------------------------------------------- |
 | `--help`                       | `-h`  | Show usage help and exit.                                                                         |
-| `--harness pi\|claude\|hermes` | `-H`  | Choose the agent to run. Defaults to `pi`.                                                        |
+| `--harness pi\|claude`        | `-H`  | Choose the agent to run. Defaults to `pi`.                                                        |
 | `--build`                      |       | Build the image locally from the Dockerfiles instead of using the published image.                |
 | `--pull`                       |       | Update the image prior to launching.                                                              |
 | `--unsafe-enable-docker`       |       | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers. |
@@ -89,22 +86,6 @@ Launch Claude Code:
 ```sh
 ./launch.sh --harness claude
 ```
-
-Launch Hermes Agent:
-
-```sh
-./launch.sh --harness hermes
-```
-
-Launch the Hermes dashboard with port 9119 published:
-
-```sh
-./launch.sh --harness hermes --port 9119:9119 -- dashboard
-```
-
-The Hermes dashboard defaults to `0.0.0.0` and does not open a browser in the
-container. Hermes requires a dashboard authentication provider for this
-non-loopback bind.
 
 Pass arguments through to the agent (everything after `--` is forwarded):
 
@@ -171,5 +152,4 @@ These paths are always bind-mounted.
 | current working directory | same absolute path | rw   |
 | `~/.pi`                   | `~/.pi`            | rw   |
 | `~/.claude`               | `~/.claude`        | rw   |
-| `~/.hermes`               | `~/.hermes`        | rw   |
 | `~/.gitconfig`            | `~/.gitconfig`     | ro   |
