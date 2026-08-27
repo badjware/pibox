@@ -83,22 +83,28 @@ def resolve_value(value: str) -> str:
     return re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)", replace, value)
 
 
-def provider_config(name: str, config: dict[str, object], api_key: str) -> tuple[str, dict[str, object]]:
-    api = config.get("api")
-    mapped = PI_PROVIDER_MAP.get(name)
-    if mapped is None:
-        if api != "openai-completions":
-            raise RuntimeError("nanobot has no compatible provider adapter")
-        mapped = f"pi_{name.replace('-', '_')}"
-
-    if api == "openai-responses" and mapped != "openai":
-        raise RuntimeError("nanobot only supports OpenAI Responses through its openai provider")
-    if api == "anthropic-messages" and mapped != "anthropic":
-        raise RuntimeError("nanobot only supports Anthropic Messages through its anthropic provider")
-    if api == "google-generative-ai" and mapped != "gemini":
-        raise RuntimeError("nanobot only supports Google Generative AI through its gemini provider")
+def provider_config(
+    name: str,
+    config: dict[str, object],
+    api_key: str,
+    api: object,
+) -> tuple[str, dict[str, object]]:
+    if api == "anthropic-messages":
+        mapped = "anthropic"
+    elif api == "google-generative-ai":
+        mapped = "gemini"
+    elif api == "openai-responses":
+        mapped = "openai"
+    else:
+        mapped = PI_PROVIDER_MAP.get(name)
+        if mapped is None:
+            if api != "openai-completions":
+                raise RuntimeError("nanobot has no compatible provider adapter")
+            mapped = f"pi_{name.replace('-', '_')}"
 
     result: dict[str, object] = {"apiKey": api_key}
+    if mapped == "openai" and api != "openai-completions":
+        result["apiType"] = "responses"
     if isinstance(config.get("baseUrl"), str):
         result["apiBase"] = resolve_value(config["baseUrl"])
     if isinstance(config.get("headers"), dict):
@@ -142,25 +148,44 @@ def main() -> None:
     skipped: list[str] = []
     preset_by_pi_model: dict[tuple[str, str], str] = {}
 
-    for name, definition in provider_definitions.items():
+    provider_names = list(provider_definitions)
+    provider_names.extend(sorted(set(available) - set(provider_definitions)))
+    for name in provider_names:
+        definition = provider_definitions.get(name, {})
         if not isinstance(name, str) or not isinstance(definition, dict):
             skipped.append(f"{name}: invalid provider definition")
+            continue
+        if name not in PI_PROVIDER_MAP and name not in provider_definitions:
+            skipped.append(f"{name}: nanobot has no compatible provider adapter")
             continue
         models = available.get(name, [])
         if not models:
             skipped.append(f"{name}: no available pi models")
             continue
         try:
-            nanobot_provider, config = provider_config(name, definition, get_api_key(name))
+            api_key = get_api_key(name)
         except (RuntimeError, json.JSONDecodeError) as exc:
             skipped.append(f"{name}: {exc}")
             continue
-        if nanobot_provider in providers:
-            skipped.append(f"{name}: maps to duplicate nanobot provider {nanobot_provider}")
-            continue
-        providers[nanobot_provider] = config
+        model_apis = {
+            model["id"]: model.get("api", definition.get("api"))
+            for model in definition.get("models", [])
+            if isinstance(model, dict) and isinstance(model.get("id"), str)
+        }
         for model in models:
-            preset = f"pi/{name}/{model}"
+            try:
+                nanobot_provider, config = provider_config(
+                    name, definition, api_key, model_apis.get(model, definition.get("api"))
+                )
+            except RuntimeError as exc:
+                skipped.append(f"{name}/{model}: {exc}")
+                continue
+            existing = providers.get(nanobot_provider)
+            if existing is not None and existing != config:
+                skipped.append(f"{name}/{model}: maps to duplicate nanobot provider {nanobot_provider}")
+                continue
+            providers[nanobot_provider] = config
+            preset = f"{name}/{model}"
             presets[preset] = {"provider": nanobot_provider, "model": model}
             preset_by_pi_model[(name, model)] = preset
 
@@ -195,6 +220,7 @@ def main() -> None:
     ):
         defaults.pop(key, None)
     defaults["modelPreset"] = preset
+    defaults["fallbackModels"] = [name for name in presets if name != preset]
     agents = dict(agents)
     agents["defaults"] = defaults
     generated["agents"] = agents

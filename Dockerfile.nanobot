@@ -3,6 +3,7 @@ FROM ${BASE_IMAGE}
 
 ARG NANOBOT_VERSION=0.3.0
 
-RUN pipx install nanobot-ai==${NANOBOT_VERSION}
+RUN pipx install nanobot-ai==${NANOBOT_VERSION} \
+    && pipx inject nanobot-ai 'aiohttp>=3.9.0,<4.0.0'
 
 COPY nanobot/pi_provider_bridge.py /usr/local/lib/pibox/nanobot_pi_bridge.py
