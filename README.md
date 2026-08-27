@@ -65,6 +65,7 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 | `--unsafe-enable-aws`           |       | Mount `~/.aws` into the container.                                                                |
 | `--unsafe-enable-kube`          |       | Mount `~/.kube` into the container.                                                               |
 | `--unsafe-host-wayland`         |       | Mount the Wayland socket into the container and forward Wayland environment variables.            |
+| `--unsafe-host-tmux`            |       | Mount the tmux socket into the container and forward the tmux environment variable.               |
 | `--unsafe-host-net`             |       | Share the host network namespace.                                                                 |
 | `--enable-pi-provider-bridge`   |       | Configure nanobot's models from pi. Requires `--harness nanobot`.                                |
 | `--ephemeral`, `--tmp`          | `-e`  | Start in a temporary working directory instead of the current one.                                |
@@ -149,8 +150,6 @@ the container:
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL`          | claude     |
 | `ANTHROPIC_CUSTOM_HEADERS`               | claude     |
 | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` | claude     |
-| `WAYLAND_DISPLAY`                        | optional   |
-| `XDG_RUNTIME_DIR`                        | optional   |
 
 ## What's inside the image
 
@@ -160,6 +159,7 @@ The container ships with a minimal set of tools suited to a coding agent:
 - `node`, `python3` (aliased as `python`), `go`
 - `fd`, `rg`, `jq`, `yq`, `bc`
 - `docker` + `docker compose`
+- `tmux`
 
 Tools deliberately **not** installed: `sudo`, `ssh`, `scp`, `curl`, `wget`.
 
