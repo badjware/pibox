@@ -66,7 +66,7 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 | `--unsafe-enable-kube`          |       | Mount `~/.kube` into the container.                                                               |
 | `--unsafe-host-wayland`         |       | Mount the Wayland socket into the container and forward Wayland environment variables.            |
 | `--unsafe-host-net`             |       | Share the host network namespace.                                                                 |
-| `--enable-pi-provider-bridge`   |       | Configure nanobot's models from explicitly configured pi providers. Requires `--harness nanobot`. |
+| `--enable-pi-provider-bridge`   |       | Configure nanobot's models from pi. Requires `--harness nanobot`.                                |
 | `--ephemeral`, `--tmp`          | `-e`  | Start in a temporary working directory instead of the current one.                                |
 | `--read-only`, `--ro`           | `-r`  | Mount all volumes as read-only inside the container.                                              |
 | `--volume <spec>`               | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                          |
@@ -101,9 +101,9 @@ Launch nanobot using models explicitly configured in pi:
 ./launch.sh --harness nanobot --enable-pi-provider-bridge
 ```
 
-The bridge reads `~/.pi/agent/models.json`, imports only those providers' models
-that `pi --offline --list-models` reports as available, and resolves API keys
-through `pi auth`. It writes `~/.nanobot/pibox-config.json` with owner-only
+The bridge imports models that `pi --offline --list-models` reports as available,
+then resolves API keys through `pi auth`. It reads `~/.pi/agent/models.json` for
+custom provider settings. It writes `~/.nanobot/pibox-config.json` with owner-only
 permissions and leaves `~/.nanobot/config.json` unchanged. OAuth providers and
 providers nanobot cannot represent are skipped.
 
