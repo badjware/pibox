@@ -19,6 +19,7 @@ getent passwd "$HOST_UID" >/dev/null || useradd  -u "$HOST_UID" -g "$HOST_GID" -
 # when setting up bind mounts. Fix ownership on HOME itself and any root-owned
 # stub directories directly beneath it (.local, .local/share, etc.).
 USER_HOME=$(getent passwd "$HOST_UID" | cut -d: -f6)
+export PATH="$USER_HOME/go/bin:$PATH"
 chown "$HOST_UID:$HOST_GID" "$USER_HOME"
 for stub in "$USER_HOME/.local" "$USER_HOME/.local/share" "$USER_HOME/.cache" "$USER_HOME/.claude"; do
     if [[ -d "$stub" ]] && [[ "$(stat -c '%u' "$stub")" == "0" ]]; then
@@ -95,8 +96,8 @@ install -d -o "$HOST_UID" -g "$HOST_GID" "$USER_HOME/.cache"
 
 # Drop root privileges and run the chosen harness as the host user
 case "$HARNESS" in
-    pi)     exec runuser -u "$HOST_USER" -- pi "$@" ;;
-    claude) exec runuser -u "$HOST_USER" -- claude --trust --dangerously-skip-permissions "$@" ;;
+    pi)     exec runuser -u "$HOST_USER" -- env PATH="$PATH" pi "$@" ;;
+    claude) exec runuser -u "$HOST_USER" -- env PATH="$PATH"  claude --trust --dangerously-skip-permissions "$@" ;;
     nanobot)
         if [[ "$ENABLE_PI_PROVIDER_BRIDGE" == "1" ]]; then
             case "${1:-}" in
