@@ -30,6 +30,7 @@ Options:
       --unsafe-enable-aws       mount ~/.aws into the container
       --unsafe-enable-kube      mount ~/.kube into the container
       --unsafe-host-wayland     mount the Wayland socket into the container
+      --unsafe-host-tmux        mount the tmux socket into the container
       --unsafe-host-net         share the host network namespace
       --enable-pi-provider-bridge
                                 configure nanobot models from pi
@@ -63,7 +64,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o 'hp:erH:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-net,enable-pi-provider-bridge,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,port:,sac-moe-patience' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'hp:erH:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-tmux,unsafe-host-net,enable-pi-provider-bridge,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,port:,sac-moe-patience' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
@@ -72,6 +73,7 @@ enable_docker=0
 enable_aws=0
 enable_kube=0
 forward_wayland=0
+forward_tmux=0
 net_host=0
 enable_pi_provider_bridge=0
 ephemeral=0
@@ -109,6 +111,10 @@ while true; do
             ;;
         --unsafe-host-wayland)
             forward_wayland=1
+            shift
+            ;;
+        --unsafe-host-tmux)
+            forward_tmux=1
             shift
             ;;
         --unsafe-host-net)
@@ -165,6 +171,7 @@ fi
 [[ "$enable_aws" -eq 1 ]] && confirm "--unsafe-enable-aws mounts ~/.aws into the container"
 [[ "$enable_kube" -eq 1 ]] && confirm "--unsafe-enable-kube mounts ~/.kube into the container"
 [[ "$forward_wayland" -eq 1 ]] && confirm "--unsafe-host-wayland mounts the Wayland socket into the container"
+[[ "$forward_tmux" -eq 1 ]] && confirm "--unsafe-host-tmux mounts the tmux socket into the container"
 [[ "$net_host" -eq 1 ]] && confirm "--unsafe-host-net shares the host network namespace"
 for port in "${ports[@]}"; do
     confirm "--port publishes $port on the host"
@@ -287,6 +294,24 @@ if [[ "$forward_wayland" -eq 1 ]]; then
         "-e" "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
         "-e" "WAYLAND_DISPLAY=$WAYLAND_DISPLAY"
         "-e" "XDG_SESSION_TYPE=wayland"
+    )
+fi
+
+if [[ "$forward_tmux" -eq 1 ]]; then
+    if [[ -z "${TMUX:-}" ]]; then
+        echo "$0: --unsafe-host-tmux requires TMUX to be set" >&2
+        exit 2
+    fi
+
+    tmux_socket="${TMUX%%,*}"
+    if [[ ! -S "$tmux_socket" ]]; then
+        echo "$0: tmux socket not found: $tmux_socket" >&2
+        exit 2
+    fi
+
+    docker_extra_args+=(
+        "-v" "$tmux_socket:$tmux_socket:rw"
+        "-e" "TMUX=$TMUX"
     )
 fi
 

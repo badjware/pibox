@@ -15,6 +15,7 @@ _pibox() {
         '--unsafe-enable-aws[mount ~/.aws into the container]' \
         '--unsafe-enable-kube[mount ~/.kube into the container]' \
         '--unsafe-host-wayland[mount the Wayland socket into the container]' \
+        '--unsafe-host-tmux[mount the tmux socket into the container]' \
         '--unsafe-host-net[share the host network namespace]' \
         '--enable-pi-provider-bridge[configure nanobot models from pi]' \
         '(-)--[forward remaining args to the agent]:: :_default'
