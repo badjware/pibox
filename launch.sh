@@ -29,6 +29,7 @@ Options:
       --unsafe-enable-docker    enable rootless Docker-in-Docker (privileged)
       --unsafe-enable-aws       mount ~/.aws into the container
       --unsafe-enable-kube      mount ~/.kube into the container
+      --unsafe-enable-ssh       mount ~/.ssh into the container
       --unsafe-host-wayland     mount the Wayland socket into the container
       --unsafe-host-tmux        mount the tmux socket into the container
       --unsafe-host-net         share the host network namespace
@@ -64,7 +65,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o 'hp:erH:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-tmux,unsafe-host-net,enable-pi-provider-bridge,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,port:,sac-moe-patience' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'hp:erH:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-enable-ssh,unsafe-host-wayland,unsafe-host-tmux,unsafe-host-net,enable-pi-provider-bridge,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,port:,sac-moe-patience' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
@@ -72,6 +73,7 @@ pull=0
 enable_docker=0
 enable_aws=0
 enable_kube=0
+enable_ssh=0
 forward_wayland=0
 forward_tmux=0
 net_host=0
@@ -107,6 +109,10 @@ while true; do
             ;;
         --unsafe-enable-kube)
             enable_kube=1
+            shift
+            ;;
+        --unsafe-enable-ssh)
+            enable_ssh=1
             shift
             ;;
         --unsafe-host-wayland)
@@ -170,6 +176,7 @@ fi
 [[ "$enable_docker" -eq 1 ]] && confirm "--unsafe-enable-docker enables privileged mode"
 [[ "$enable_aws" -eq 1 ]] && confirm "--unsafe-enable-aws mounts ~/.aws into the container"
 [[ "$enable_kube" -eq 1 ]] && confirm "--unsafe-enable-kube mounts ~/.kube into the container"
+[[ "$enable_ssh" -eq 1 ]] && confirm "--unsafe-enable-ssh mounts ~/.ssh into the container"
 [[ "$forward_wayland" -eq 1 ]] && confirm "--unsafe-host-wayland mounts the Wayland socket into the container"
 [[ "$forward_tmux" -eq 1 ]] && confirm "--unsafe-host-tmux mounts the tmux socket into the container"
 [[ "$net_host" -eq 1 ]] && confirm "--unsafe-host-net shares the host network namespace"
@@ -185,6 +192,7 @@ fi
 # ensure host dirs exist before bind-mounting so docker doesn't create them as root
 [[ "$enable_aws" -eq 1 ]] && mkdir -p "$HOME/.aws"
 [[ "$enable_kube" -eq 1 ]] && mkdir -p "$HOME/.kube"
+[[ "$enable_ssh" -eq 1 ]] && mkdir -p "$HOME/.ssh"
 
 # remaining arguments are passed through to pi inside the container
 harness_args=("$@")
@@ -371,6 +379,7 @@ if [[ -n "$host_ca" && -f "$host_ca" ]]; then
 fi
 [[ "$enable_aws" -eq 1 ]] && _vol_register "$HOME/.aws:/home/$HOST_USER/.aws:ro"
 [[ "$enable_kube" -eq 1 ]] && _vol_register "$HOME/.kube:/home/$HOST_USER/.kube:ro"
+[[ "$enable_ssh" -eq 1 ]] && _vol_register "$HOME/.ssh:/home/$HOST_USER/.ssh:ro"
 
 # user-provided
 for vol in "${volumes[@]}"; do
@@ -401,6 +410,9 @@ exec docker run --rm \
     -e "HOST_GID=$HOST_GID" \
     -e "HOST_USER=$HOST_USER" \
     -e "HARNESS=$harness" \
+    -e "ENABLE_AWS=$enable_aws" \
+    -e "ENABLE_KUBE=$enable_kube" \
+    -e "ENABLE_SSH=$enable_ssh" \
     -e "ENABLE_PI_PROVIDER_BRIDGE=$enable_pi_provider_bridge" \
     -e "EXTRA_PACKAGES=${extra_packages[*]}" \
     ${host_ca:+-e "SSL_CERT_FILE=/etc/ssl/host-ca-bundle.pem"} \

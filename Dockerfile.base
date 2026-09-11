@@ -1,6 +1,3 @@
-ARG AWS_CLI_VERSION=latest
-FROM amazon/aws-cli:${AWS_CLI_VERSION} AS awscli
-
 FROM opensuse/tumbleweed
 
 ARG NODE_VERSION=26
@@ -16,8 +13,6 @@ RUN zypper --non-interactive refresh \
         terminfo \
         man man-pages \
         ca-certificates curl \
-        docker docker-compose docker-buildx docker-rootless-extras \
-        fuse-overlayfs iproute2 containerd iptables iptables-backend-nft \
     && ln -sf /usr/bin/python3 /usr/bin/python
 
 ENV EDITOR=vim
@@ -29,10 +24,6 @@ RUN rpm --import https://packages.microsoft.com/keys/microsoft.asc \
     && rpm --import https://packages.microsoft.com/keys/microsoft-2025.asc \
     && zypper addrepo --refresh https://packages.microsoft.com/config/opensuse/16/prod.repo
 
-# awscli
-COPY --from=awscli /usr/local/aws-cli /usr/local/aws-cli
-RUN ln -sf /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws
-
 # playwright
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     npm install -g patchright@${PLAYWRIGHT_VERSION}
@@ -40,10 +31,8 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
 # trafilatura
 RUN pipx install trafilatura==${TRAFILATURA_VERSION}
 
-# kubectl
-RUN zypper addrepo --refresh "https://pkgs.k8s.io/core:/stable:/${KUBECTL_VERSION}/rpm/" kubernetes \
-    && zypper --gpg-auto-import-keys --non-interactive refresh kubernetes \
-    && zypper --non-interactive install --no-recommends kubectl
+# kubectl repo (kubectl itself is installed at runtime via --unsafe-enable-kube)
+RUN zypper addrepo --refresh "https://pkgs.k8s.io/core:/stable:/${KUBECTL_VERSION}/rpm/" kubernetes
 
 # cleanup
 RUN zypper --non-interactive remove -y --clean-deps sudo openssh openssh-clients || true \

@@ -22,8 +22,6 @@ Pre-installed:
 - `vim` (`$EDITOR` is set to `vim`)
 - Standard GNU coreutils, bash utilities
 
-Not available: `sudo`, `ssh`, `scp`, `wget`
-
 Use `rg` instead of `grep`, and `fd` instead of `find`.
 
 Use `bc` for math, even simple operations. Use `jq` for JSON and `yq` for YAML.
