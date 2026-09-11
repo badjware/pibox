@@ -14,6 +14,7 @@ _pibox() {
         '--unsafe-enable-docker[enable rootless Docker-in-Docker (privileged)]' \
         '--unsafe-enable-aws[mount ~/.aws into the container]' \
         '--unsafe-enable-kube[mount ~/.kube into the container]' \
+        '--unsafe-enable-ssh[mount ~/.ssh into the container]' \
         '--unsafe-host-wayland[mount the Wayland socket into the container]' \
         '--unsafe-host-tmux[mount the tmux socket into the container]' \
         '--unsafe-host-net[share the host network namespace]' \
