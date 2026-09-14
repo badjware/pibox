@@ -2,7 +2,7 @@
 
 A containerized, sandboxed environment for running AI coding agents.
 
-Pibox wraps a coding agent inside an Ubuntu-based Docker image so the agent
+Pibox wraps a coding agent inside an Arch Linux-based Docker image so the agent
 executes against your working directory without having unrestricted access to
 your host system. The container mirrors your host user (UID/GID/name) so files
 created inside the container keep consistent ownership on the host.
@@ -11,7 +11,7 @@ Three harnesses are supported:
 
 | Harness        | Agent                                                    | Image                            |
 | -------------- | -------------------------------------------------------- | -------------------------------- |
-| `pi` (default) | [pi](https://github.com/badlogic/pi)                     | `ghcr.io/badjware/pibox:pi`      |
+| `pi` (default) | [pi](https://github.com/earendil-works/pi)               | `ghcr.io/badjware/pibox:pi`      |
 | `claude`       | [Claude Code](https://github.com/anthropics/claude-code) | `ghcr.io/badjware/pibox:claude`  |
 | `nanobot`      | [nanobot](https://github.com/HKUDS/nanobot)              | `ghcr.io/badjware/pibox:nanobot` |
 
@@ -19,7 +19,7 @@ Three harnesses are supported:
 
 - **Sandboxed execution**: the agent runs inside a container with an ephemeral filesystem.
 - **Host-user mirroring**: files written from inside the container are owned by your host user.
-- **Persistent config**: `~/.pi` and `~/.claude` are bind-mounted so settings and sessions survive between runs.
+- **Persistent config**: `~/.pi`, `~/.claude`, and `~/.nanobot` are bind-mounted so settings and sessions survive between runs.
 - **Optional rootless Docker-in-Docker**: opt in with `--unsafe-enable-docker` when the agent needs to run containers itself.
 - **Pre-built images**: distributed via GitHub Container Registry.
 
@@ -67,7 +67,7 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 | `--unsafe-host-wayland`         |       | Mount the Wayland socket into the container and forward Wayland environment variables.            |
 | `--unsafe-host-tmux`            |       | Mount the tmux socket into the container and forward the tmux environment variable.               |
 | `--unsafe-host-net`             |       | Share the host network namespace.                                                                 |
-| `--enable-pi-provider-bridge`   |       | Configure nanobot's models from pi. Requires `--harness nanobot`.                                |
+| `--enable-pi-provider-bridge`   |       | Configure nanobot's models from pi. Requires `--harness nanobot`.                                 |
 | `--ephemeral`, `--tmp`          | `-e`  | Start in a temporary working directory instead of the current one.                                |
 | `--read-only`, `--ro`           | `-r`  | Mount all volumes as read-only inside the container.                                              |
 | `--volume <spec>`               | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                          |
@@ -165,24 +165,33 @@ the container:
 
 ## What's inside the image
 
-The container ships with a minimal set of tools suited to a coding agent:
+The container ships with a set of tools suited to a coding agent:
 
-- `git`, `vim` (as `$EDITOR`)
-- `node`, `python3` (aliased as `python`), `go`
-- `fd`, `rg`, `jq`, `yq`, `bc`
+- `git`, `vim` (as `$EDITOR`), `tmux`
+- `node`, `python` (Python 3), `go`, `gcc`, `make`
+- `fd`, `rg`, `jq`, `yq`, `bc`, `zip`, `unzip`, `diffutils`, `curl`
 - `docker` + `docker compose`
-- `tmux`
+- `kubectl`, `aws` (aws-cli)
+- `chromium`, `wl-clipboard`, `patchright` (Playwright), `trafilatura`
 
-Tools deliberately **not** installed: `sudo`, `ssh`, `scp`, `curl`, `wget`.
+Tools deliberately **not** installed: `sudo`, `ssh`, `scp`, `wget`.
 
 ## Default bind mounts
 
 These paths are always bind-mounted.
 
-| Host                      | Container          | Mode |
-| ------------------------- | ------------------ | ---- |
-| current working directory | same absolute path | rw   |
-| `~/.pi`                   | `~/.pi`            | rw   |
-| `~/.claude`               | `~/.claude`        | rw   |
-| `~/.nanobot`              | `~/.nanobot`       | rw   |
-| `~/.gitconfig`            | `~/.gitconfig`     | ro   |
+| Host                      | Container                     | Mode |
+| ------------------------- | ----------------------------- | ---- |
+| current working directory | same absolute path            | rw   |
+| `~/.pi`                   | `~/.pi`                       | rw   |
+| `~/.pi/agent/extensions`  | `~/.pi/agent/extensions`      | ro   |
+| `~/.claude`               | `~/.claude`                   | ro   |
+| `~/.claude/project`       | `~/.claude/project`           | rw   |
+| `~/.claude.json`          | `~/.claude.json`              | rw   |
+| `~/.nanobot`              | `~/.nanobot`                  | rw   |
+| `~/.gitconfig`            | `~/.gitconfig`                | ro   |
+| `pibox-cache` volume      | `~/.cache`                    | rw   |
+| `/etc/fonts`              | `/etc/fonts`                  | ro   |
+| `/usr/share/fonts`        | `/usr/share/fonts`            | ro   |
+| `/var/cache/fontconfig`   | `/var/cache/fontconfig`       | ro   |
+| host CA bundle            | `/etc/ssl/host-ca-bundle.pem` | ro   |
