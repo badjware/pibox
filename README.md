@@ -71,7 +71,7 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 | `--ephemeral`, `--tmp`          | `-e`  | Start in a temporary working directory instead of the current one.                                |
 | `--read-only`, `--ro`           | `-r`  | Mount all volumes as read-only inside the container.                                              |
 | `--volume <spec>`               | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                          |
-| `--extra-package <name>`        | `-P`  | Install an extra apt package at container startup. Repeatable and non-persistent.                 |
+| `--extra-package <name>`        | `-P`  | Install an extra pacman or AUR package at container startup. Repeatable and non-persistent.       |
 | `--port <spec>`                 | `-p`  | Publish a container port. Repeatable, using Docker `-p` syntax such as `9119:9119`.               |
 
 Any arguments after `--` are passed through to the agent inside the container.
@@ -113,6 +113,18 @@ Pass arguments through to the agent (everything after `--` is forwarded):
 ```sh
 ./launch.sh -- -p "summarize the README"
 ```
+
+Install extra packages at startup (repo or AUR):
+
+```sh
+./launch.sh -P tree -P openscad-git
+```
+
+Packages known to pacman are installed from the official repositories. Anything
+else is treated as an AUR package: it is cloned, its dependencies are installed,
+and it is built from source at container startup. AUR builds are not recursive,
+so an AUR package whose own dependencies are AUR-only will fail to build. This
+covers packages whose dependencies all live in the official repositories.
 
 Force-refresh the image from GHCR:
 

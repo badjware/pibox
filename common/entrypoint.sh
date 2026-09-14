@@ -39,6 +39,12 @@ start_rootless_docker() {
     echo "$HOST_USER:100000:65536" >> /etc/subuid
     echo "$HOST_USER:100000:65536" >> /etc/subgid
 
+    # newuidmap / newgidmap need cap_setuid / cap_setgid to write the maps.
+    # The file capabilities set by the shadow package can be lost during image
+    # layer export, so we reassert them here before starting the daemon.
+    setcap cap_setuid+ep /usr/bin/newuidmap
+    setcap cap_setgid+ep /usr/bin/newgidmap
+
     # XDG_RUNTIME_DIR holds the docker socket. The bind-mounted socket file
     # lives here, so it survives rootlesskit's --copy-up=/run overlay and
     # remains reachable from the outer container at the same path.
@@ -82,13 +88,73 @@ start_rootless_docker() {
 [[ "$ENABLE_DOCKER" == "1" ]] && start_rootless_docker
 
 # ---------------------------------------------------------------------------
-# Optional: install extra apt packages requested via --extra-package.
+# Optional: install extra packages requested via --extra-package.
+#
+# Official-repo packages are installed directly with pacman. Anything pacman
+# does not know about is treated as an AUR package: we clone it, install its
+# repo dependencies as root, build it as the unprivileged host user (makepkg
+# refuses to run as root), then install the built package with pacman -U.
+#
+# AUR builds are not recursive: only official-repo dependencies are resolved,
+# so an AUR package with AUR-only dependencies will fail to build.
 # ---------------------------------------------------------------------------
+build_aur_package() {
+    # Build a single AUR package as the host user and install it as root.
+    local pkg="$1"
+    local build_dir
+    build_dir=$(mktemp -d)
+    chown "$HOST_UID:$HOST_GID" "$build_dir"
+
+    if ! runuser -u "$HOST_USER" -- git clone --depth=1 "https://aur.archlinux.org/$pkg.git" "$build_dir/$pkg"; then
+        echo "ERROR: failed to clone AUR package '$pkg'" >&2
+        rm -rf "$build_dir"
+        return 1
+    fi
+
+    # Install repo dependencies as root so makepkg can run without sudo.
+    local deps
+    deps=$(runuser -u "$HOST_USER" -- makepkg --printsrcinfo -D "$build_dir/$pkg" \
+        | sed -n 's/^[[:space:]]*\(make\)\?depends = //p' | sed 's/[<>=].*//')
+    if [[ -n "$deps" ]]; then
+        pacman -S --noconfirm --needed --asdeps $deps
+    fi
+
+    if ! runuser -u "$HOST_USER" -- bash -c "cd '$build_dir/$pkg' && makepkg --noconfirm"; then
+        echo "ERROR: failed to build AUR package '$pkg'" >&2
+        rm -rf "$build_dir"
+        return 1
+    fi
+
+    local built
+    built=$(find "$build_dir/$pkg" -name '*.pkg.tar.zst' | grep -v -- '-debug')
+    pacman -U --noconfirm $built
+    rm -rf "$build_dir"
+}
+
 if [[ -n "${EXTRA_PACKAGES:-}" ]]; then
     echo "Installing extra packages: $EXTRA_PACKAGES" >&2
-    zypper --non-interactive refresh
-    zypper --non-interactive install --no-recommends $EXTRA_PACKAGES
-    zypper clean --all
+    pacman -Sy --noconfirm >/dev/null
+
+    repo_packages=()
+    aur_packages=()
+    for pkg in $EXTRA_PACKAGES; do
+        if pacman -Si "$pkg" >/dev/null 2>&1; then
+            repo_packages+=("$pkg")
+        else
+            aur_packages+=("$pkg")
+        fi
+    done
+
+    [[ ${#repo_packages[@]} -gt 0 ]] && pacman -S --noconfirm --needed "${repo_packages[@]}"
+
+    if [[ ${#aur_packages[@]} -gt 0 ]]; then
+        pacman -S --noconfirm --needed base-devel git
+        for pkg in "${aur_packages[@]}"; do
+            build_aur_package "$pkg"
+        done
+    fi
+
+    pacman -Scc --noconfirm
 fi
 
 # Ensure cache directory exists and is owned by the host user

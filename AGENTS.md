@@ -9,7 +9,7 @@ The working directory is bind-mounted into the container so the agent operates o
 
 ```
 launch.sh                           # main entry point: parses flags, builds/pulls image, runs container
-Dockerfile.base                     # shared base image (Ubuntu + tools)
+Dockerfile.base                     # shared base image (Arch Linux + tools)
 Dockerfile.pi                       # extends base; installs @earendil-works/pi-coding-agent
 Dockerfile.claude                   # extends base; installs @anthropic-ai/claude-code
 common/
@@ -34,11 +34,17 @@ common/
 | `--ephemeral`, `--tmp` | `-e` | use a temp workdir |
 | `--read-only`, `--ro` | `-r` | mount all volumes read-only |
 | `--volume` | `-v` | bind-mount an extra volume (repeatable; same syntax as `docker run -v`) |
-| `--extra-package` | `-P` | install an extra apt package at container startup (repeatable; non-persistent) |
+| `--extra-package` | `-P` | install an extra pacman or AUR package at container startup (repeatable; non-persistent) |
 | `--port` | `-p` | publish a container port (repeatable; Docker `-p` syntax) |
 | `--` | | remaining args forwarded to the agent inside the container |
 
 Unsafe options (`--unsafe-*`) intentionally have no short form to reduce the risk of accidental use.
+
+### `--extra-package` and the AUR
+
+`common/entrypoint.sh` installs `--extra-package` requests at container startup. It splits the list by probing `pacman -Si`: packages known to pacman install from the official repositories, everything else is treated as an AUR package. AUR packages are cloned from `aur.archlinux.org`, their repo dependencies are installed as root (parsed from `makepkg --printsrcinfo`), the package is built as the unprivileged host user (makepkg refuses to run as root), then installed with `pacman -U` (the `-debug` package is skipped).
+
+AUR builds are not recursive: an AUR package whose own dependencies are AUR-only will fail because only official-repo dependencies are resolved. This is a deliberate simplification to avoid pulling an AUR helper and `sudo` into the image.
 
 ## Shell completions
 

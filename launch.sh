@@ -24,7 +24,7 @@ Options:
   -e, --ephemeral, --tmp        use a temp workdir
   -r, --read-only, --ro         mount all volumes read-only
   -v, --volume VOLUME           bind-mount an extra volume (repeatable)
-  -P, --extra-package PACKAGE   install an extra apt package at startup (repeatable)
+  -P, --extra-package PACKAGE   install an extra pacman or AUR package at startup (repeatable)
   -p, --port PORT               publish a container port (repeatable; Docker -p syntax)
       --unsafe-enable-docker    enable rootless Docker-in-Docker (privileged)
       --unsafe-enable-aws       mount ~/.aws into the container
