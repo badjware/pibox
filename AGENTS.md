@@ -25,10 +25,9 @@ common/
 | `--harness pi\|claude`        | `-H` | agent to run (default: `pi`) |
 | `--build` | | build images locally instead of pulling |
 | `--pull` | | pull latest image before launch |
-| `--unsafe-enable-docker` | (none, intentional) | enable rootless Docker-in-Docker (privileged); installs docker at runtime |
-| `--unsafe-enable-aws` | (none, intentional) | mount `~/.aws` into the container; installs awscli v2 at runtime |
-| `--unsafe-enable-kube` | (none, intentional) | mount `~/.kube` into the container; installs kubectl at runtime |
-| `--unsafe-enable-ssh` | (none, intentional) | mount `~/.ssh` into the container (read-only); installs openssh-client at runtime |
+| `--unsafe-enable-docker` | (none, intentional) | enable rootless Docker-in-Docker (privileged) |
+| `--unsafe-enable-aws` | (none, intentional) | mount `~/.aws` into the container (awscli is pre-installed) |
+| `--unsafe-enable-kube` | (none, intentional) | mount `~/.kube` into the container (kubectl is pre-installed) |
 | `--unsafe-host-wayland` | (none, intentional) | mount the Wayland socket into the container and forward Wayland env vars |
 | `--unsafe-host-tmux` | (none, intentional) | mount the tmux socket into the container and forward the tmux environment variable |
 | `--unsafe-host-net` | (none, intentional) | share the host network namespace (`--network=host`) |

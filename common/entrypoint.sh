@@ -5,9 +5,6 @@ HOST_UID="${HOST_UID:?HOST_UID environment variable is required}"
 HOST_GID="${HOST_GID:?HOST_GID environment variable is required}"
 HOST_USER="${HOST_USER:?HOST_USER environment variable is required}"
 ENABLE_DOCKER="${ENABLE_DOCKER:-0}"
-ENABLE_AWS="${ENABLE_AWS:-0}"
-ENABLE_KUBE="${ENABLE_KUBE:-0}"
-ENABLE_SSH="${ENABLE_SSH:-0}"
 HARNESS="${HARNESS:-pi}"
 ENABLE_PI_PROVIDER_BRIDGE="${ENABLE_PI_PROVIDER_BRIDGE:-0}"
 
@@ -81,49 +78,6 @@ start_rootless_docker() {
     export DOCKER_HOST="unix://$sock"
     export XDG_RUNTIME_DIR="$runtime_dir"
 }
-
-# ---------------------------------------------------------------------------
-# Optional: install tools at runtime, gated on the matching --unsafe-* flag.
-# Kept out of the image so they only cost startup time when actually enabled.
-# ---------------------------------------------------------------------------
-install_docker() {
-    zypper --non-interactive install --no-recommends \
-        docker docker-compose docker-buildx docker-rootless-extras \
-        fuse-overlayfs iproute2 containerd iptables iptables-backend-nft
-}
-
-install_kubectl() {
-    zypper --gpg-auto-import-keys --non-interactive refresh kubernetes
-    zypper --non-interactive install --no-recommends kubectl
-}
-
-install_ssh() {
-    zypper --non-interactive install --no-recommends openssh-clients
-}
-
-install_awscli() {
-    local arch tmp
-    case "$(uname -m)" in
-        x86_64)  arch="x86_64" ;;
-        aarch64) arch="aarch64" ;;
-        *)       echo "install_awscli: unsupported arch $(uname -m)" >&2; return 1 ;;
-    esac
-    tmp="$(mktemp -d)"
-    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${arch}.zip" -o "$tmp/awscliv2.zip"
-    unzip -q "$tmp/awscliv2.zip" -d "$tmp"
-    "$tmp/aws/install" --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli
-    rm -rf "$tmp"
-}
-
-if [[ "$ENABLE_DOCKER" == "1" || "$ENABLE_KUBE" == "1" || "$ENABLE_SSH" == "1" ]]; then
-    zypper --non-interactive refresh
-    [[ "$ENABLE_DOCKER" == "1" ]] && install_docker
-    [[ "$ENABLE_KUBE" == "1" ]] && install_kubectl
-    [[ "$ENABLE_SSH" == "1" ]] && install_ssh
-    zypper clean --all
-fi
-
-[[ "$ENABLE_AWS" == "1" ]] && install_awscli
 
 [[ "$ENABLE_DOCKER" == "1" ]] && start_rootless_docker
 
