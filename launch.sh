@@ -377,8 +377,17 @@ for vol in "${volumes[@]}"; do
     _vol_register "$vol"
 done
 
-# workdir has highest priority, so we register it last
-_vol_register "$WORKDIR:$WORKDIR${read_only:+:ro}"
+# workdir has highest priority, so we register it last.
+# When launched from $HOME, default the workdir mount to read-only to avoid
+# exposing the whole home directory rw. An explicit -v for the same
+# destination overrides this default.
+if [[ "$WORKDIR" == "$HOME" && -z "$read_only" && -n "${_vol_map[$WORKDIR]+x}" ]]; then
+    : # user-provided -v for the home workdir wins; leave it as registered
+elif [[ "$WORKDIR" == "$HOME" && -z "$read_only" ]]; then
+    _vol_register "$WORKDIR:$WORKDIR:ro"
+else
+    _vol_register "$WORKDIR:$WORKDIR${read_only:+:ro}"
+fi
 
 for dest in "${_vol_keys[@]}"; do
     docker_extra_args+=("-v" "${_vol_map[$dest]}")
