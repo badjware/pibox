@@ -163,7 +163,7 @@ install -d -o "$HOST_UID" -g "$HOST_GID" "$USER_HOME/.cache"
 # Drop root privileges and run the chosen harness as the host user
 case "$HARNESS" in
     pi)     exec runuser -u "$HOST_USER" -- env PATH="$PATH" pi "$@" ;;
-    claude) exec runuser -u "$HOST_USER" -- env PATH="$PATH"  claude --trust --dangerously-skip-permissions "$@" ;;
+    claude) exec runuser -u "$HOST_USER" -- env PATH="$PATH"  claude --dangerously-skip-permissions "$@" ;;
     nanobot)
         if [[ "$ENABLE_PI_PROVIDER_BRIDGE" == "1" ]]; then
             case "${1:-}" in
