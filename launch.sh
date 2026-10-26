@@ -296,7 +296,7 @@ if [[ "$harness" == "pi-web" ]]; then
         # the host network namespace exposes 0.0.0.0 on every host interface
         docker_extra_args+=("-e" "PI_WEB_HOST=127.0.0.1")
     elif [[ "${#ports[@]}" -eq 0 ]]; then
-        docker_extra_args+=("-p" "127.0.0.1:8504:8504")
+        docker_extra_args+=("-p" "127.0.0.1:${PIBOX_PI_WEB_PORT:-8504}:8504")
     fi
 fi
 
