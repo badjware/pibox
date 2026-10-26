@@ -161,21 +161,6 @@ fpath=(/path/to/pibox/completions $fpath)
 autoload -U compinit && compinit
 ```
 
-## Environment variables
-
-The following environment variables are read from the host and forwarded into
-the container:
-
-| Variable                                 | Used by    |
-| ---------------------------------------- | ---------- |
-| `ANTHROPIC_AUTH_TOKEN`                   | pi, claude |
-| `ANTHROPIC_BASE_URL`                     | claude     |
-| `ANTHROPIC_DEFAULT_OPUS_MODEL`           | claude     |
-| `ANTHROPIC_DEFAULT_SONNET_MODEL`         | claude     |
-| `ANTHROPIC_DEFAULT_HAIKU_MODEL`          | claude     |
-| `ANTHROPIC_CUSTOM_HEADERS`               | claude     |
-| `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` | claude     |
-
 ## What's inside the image
 
 The container ships with a set of tools suited to a coding agent:

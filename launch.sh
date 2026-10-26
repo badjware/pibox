@@ -433,6 +433,7 @@ if [[ -z "$host_tz" && -L /etc/localtime ]]; then
     host_tz="$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')"
 fi
 
+set -x
 exec docker run --rm \
     -e "TZ=${host_tz}" \
     -e "COLORTERM=${COLORTERM}" \
@@ -444,14 +445,6 @@ exec docker run --rm \
     -e "ENABLE_PI_PROVIDER_BRIDGE=$enable_pi_provider_bridge" \
     -e "EXTRA_PACKAGES=${extra_packages[*]}" \
     ${host_ca:+-e "SSL_CERT_FILE=/etc/ssl/host-ca-bundle.pem"} \
-    \
-    -e "ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}" \
-    -e "ANTHROPIC_DEFAULT_OPUS_MODEL=${ANTHROPIC_DEFAULT_OPUS_MODEL}" \
-    -e "ANTHROPIC_DEFAULT_SONNET_MODEL=${ANTHROPIC_DEFAULT_SONNET_MODEL}" \
-    -e "ANTHROPIC_DEFAULT_HAIKU_MODEL=${ANTHROPIC_DEFAULT_HAIKU_MODEL}" \
-    -e "ANTHROPIC_CUSTOM_HEADERS=${ANTHROPIC_CUSTOM_HEADERS}" \
-    -e "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=${CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS}" \
-    -e "ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN}" \
     -w "$WORKDIR" \
     --ipc=none \
     --pids-limit=1024 \
