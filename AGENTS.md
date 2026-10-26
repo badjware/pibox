@@ -74,6 +74,8 @@ When adding new unsafe options, always add a call to the `confirm` helper to pro
 | `nanobot` | `ghcr.io/badjware/pibox:nanobot` | `pibox:nanobot` |
 | `pi-web` | `ghcr.io/badjware/pibox:pi-web` | `pibox:pi-web` |
 
+`~/.claude` (with `~/.claude.json`) is bind-mounted only for the `claude` harness, and `~/.nanobot` only for the `nanobot` harness.
+
 Build order when using `--build`: `Dockerfile.base` → `Dockerfile.<harness>`. `nanobot` and `pi-web` inherit from `pibox:pi`, so `Dockerfile.pi` is built in between.
 
 ### pi-web

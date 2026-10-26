@@ -55,9 +55,6 @@ confirm() {
 # ensure file exists on host to avoid creating them as root
 mkdir -p "$HOME/.pi"
 mkdir -p "$HOME/.pi/agent/extensions"
-mkdir -p "$HOME/.claude/project"
-mkdir -p "$HOME/.nanobot"
-touch "$HOME/.claude.json"
 
 docker_extra_args=()
 tmpworkdir=""
@@ -368,10 +365,15 @@ _vol_register() {
 # defaults has lowest priority, so we register them first
 _vol_register "$HOME/.pi:/home/$HOST_USER/.pi:rw"
 _vol_register "$HOME/.pi/agent/extensions:/home/$HOST_USER/.pi/agent/extensions:ro" # extensions are read-only at runtime
-_vol_register "$HOME/.claude:/home/$HOST_USER/.claude:ro"
-_vol_register "$HOME/.claude/project:/home/$HOST_USER/.claude/project:rw" # claude projects folder is always rw
-_vol_register "$HOME/.claude.json:/home/$HOST_USER/.claude.json:rw" # claude really hates to have its config file read-only
-_vol_register "$HOME/.nanobot:/home/$HOST_USER/.nanobot:rw"
+if [[ "$harness" == "claude" ]]; then
+    mkdir -p "$HOME/.claude/project"
+    touch "$HOME/.claude.json"
+    _vol_register "$HOME/.claude:/home/$HOST_USER/.claude:rw"
+fi
+if [[ "$harness" == "nanobot" ]]; then
+    mkdir -p "$HOME/.nanobot"
+    _vol_register "$HOME/.nanobot:/home/$HOST_USER/.nanobot:rw"
+fi
 if [[ "$harness" == "pi-web" ]]; then
     mkdir -p "$HOME/.pi-web" "$HOME/.config/pi-web"
     _vol_register "$HOME/.pi-web:/home/$HOST_USER/.pi-web:rw"
