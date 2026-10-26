@@ -1,0 +1,7 @@
+[Unit]
+Description=pibox pi-web socket proxy
+Requires=pibox-pi-web.socket pibox-pi-web.service
+After=pibox-pi-web.socket pibox-pi-web.service
+
+[Service]
+ExecStart=/usr/lib/systemd/systemd-socket-proxyd 127.0.0.1:18504

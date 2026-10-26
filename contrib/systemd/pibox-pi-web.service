@@ -1,0 +1,10 @@
+[Unit]
+Description=pibox pi-web container
+
+[Service]
+Environment=PIBOX_PI_WEB_PORT=18504
+WorkingDirectory=%h
+ExecStart=%h/.local/bin/pibox --read-only --harness pi-web
+# docker publishes the port before pi-web listens, so we need to probe readiness
+ExecStartPost=/bin/bash -c 'until curl -s -o /dev/null http://127.0.0.1:$PIBOX_PI_WEB_PORT/; do sleep 0.5; done'
+TimeoutStartSec=300
