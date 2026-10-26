@@ -7,13 +7,14 @@ executes against your working directory without having unrestricted access to
 your host system. The container mirrors your host user (UID/GID/name) so files
 created inside the container keep consistent ownership on the host.
 
-Three harnesses are supported:
+Four harnesses are supported:
 
 | Harness        | Agent                                                    | Image                            |
 | -------------- | -------------------------------------------------------- | -------------------------------- |
 | `pi` (default) | [pi](https://github.com/earendil-works/pi)               | `ghcr.io/badjware/pibox:pi`      |
 | `claude`       | [Claude Code](https://github.com/anthropics/claude-code) | `ghcr.io/badjware/pibox:claude`  |
 | `nanobot`      | [nanobot](https://github.com/HKUDS/nanobot)              | `ghcr.io/badjware/pibox:nanobot` |
+| `pi-web`       | [PI WEB](https://pi-web.dev/), a web UI for pi           | `ghcr.io/badjware/pibox:pi-web`  |
 
 ## Features
 
@@ -55,24 +56,25 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 
 ### Flags
 
-| Flag                            | Short | Description                                                                                       |
-| ------------------------------- | ----- | ------------------------------------------------------------------------------------------------- |
-| `--help`                        | `-h`  | Show usage help and exit.                                                                         |
-| `--harness pi\|claude\|nanobot` | `-H`  | Choose the agent to run. Defaults to `pi`.                                                        |
-| `--build`                       |       | Build the image locally from the Dockerfiles instead of using the published image.                |
-| `--pull`                        |       | Update the image prior to launching.                                                              |
-| `--unsafe-enable-docker`        |       | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers. |
-| `--unsafe-enable-aws`           |       | Mount `~/.aws` into the container.                                                                |
-| `--unsafe-enable-kube`          |       | Mount `~/.kube` into the container.                                                               |
-| `--unsafe-host-wayland`         |       | Mount the Wayland socket into the container and forward Wayland environment variables.            |
-| `--unsafe-host-tmux`            |       | Mount the tmux socket into the container and forward the tmux environment variable.               |
-| `--unsafe-host-net`             |       | Share the host network namespace.                                                                 |
-| `--enable-pi-provider-bridge`   |       | Configure nanobot's models from pi. Requires `--harness nanobot`.                                 |
-| `--ephemeral`, `--tmp`          | `-e`  | Start in a temporary working directory instead of the current one.                                |
-| `--read-only`, `--ro`           | `-r`  | Mount all volumes as read-only inside the container.                                              |
-| `--volume <spec>`               | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                          |
-| `--extra-package <name>`        | `-P`  | Install an extra pacman or AUR package at container startup. Repeatable and non-persistent.       |
-| `--port <spec>`                 | `-p`  | Publish a container port. Repeatable, using Docker `-p` syntax such as `9119:9119`.               |
+| Flag                                    | Short | Description                                                                                                                   |
+| --------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `--help`                                | `-h`  | Show usage help and exit.                                                                                                     |
+| `--harness pi\|claude\|nanobot\|pi-web` | `-H`  | Choose the agent to run. Defaults to `pi`.                                                                                    |
+| `--build`                               |       | Build the image locally from the Dockerfiles instead of using the published image.                                            |
+| `--pull`                                |       | Update the image prior to launching.                                                                                          |
+| `--unsafe-enable-docker`                |       | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers.                             |
+| `--unsafe-enable-aws`                   |       | Mount `~/.aws` into the container.                                                                                            |
+| `--unsafe-enable-kube`                  |       | Mount `~/.kube` into the container.                                                                                           |
+| `--unsafe-host-wayland`                 |       | Mount the Wayland socket into the container and forward Wayland environment variables.                                        |
+| `--unsafe-host-tmux`                    |       | Mount the tmux socket into the container and forward the tmux environment variable.                                           |
+| `--unsafe-host-net`                     |       | Share the host network namespace.                                                                                             |
+| `--enable-pi-provider-bridge`           |       | Configure nanobot's models from pi. Requires `--harness nanobot`.                                                             |
+| `--ephemeral`, `--tmp`                  | `-e`  | Start in a temporary working directory instead of the current one.                                                            |
+| `--workdir <dir>`                       | `-w`  | Use `<dir>` as the working directory instead of the current one. Incompatible with `--ephemeral`.                             |
+| `--read-only`, `--ro`                   | `-r`  | Mount all volumes as read-only inside the container.                                                                          |
+| `--volume <spec>`                       | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                                                      |
+| `--extra-package <name>`                | `-P`  | Install an extra pacman or AUR package at container startup. Repeatable and non-persistent.                                   |
+| `--port <spec>`                         | `-p`  | Publish a container port. Repeatable, using Docker `-p` syntax such as `9119:9119`. Replaces the default pi-web port mapping. |
 
 Any arguments after `--` are passed through to the agent inside the container.
 
@@ -107,6 +109,17 @@ then resolves API keys through `pi auth`. It reads `~/.pi/agent/models.json` for
 custom provider settings. It writes `~/.nanobot/pibox-config.json` with owner-only
 permissions and leaves `~/.nanobot/config.json` unchanged. OAuth providers and
 providers nanobot cannot represent are skipped.
+
+Launch PI WEB and open http://127.0.0.1:8504:
+
+```sh
+./launch.sh --harness pi-web
+```
+
+By default, pi-web is published on `127.0.0.1:8504` only. Any `--port` replaces
+that mapping. pi-web listens on port 8504 inside the container, so target it
+explicitly, for example `--port 0.0.0.0:9000:8504`. PI WEB assumes
+trusted users; only expose it on a trusted network.
 
 Pass arguments through to the agent (everything after `--` is forwarded):
 
@@ -180,18 +193,20 @@ Tools deliberately **not** installed: `sudo`, `ssh`, `scp`, `wget`.
 
 These paths are always bind-mounted.
 
-| Host                      | Container                     | Mode |
-| ------------------------- | ----------------------------- | ---- |
-| current working directory | same absolute path            | rw   |
-| `~/.pi`                   | `~/.pi`                       | rw   |
-| `~/.pi/agent/extensions`  | `~/.pi/agent/extensions`      | ro   |
-| `~/.claude`               | `~/.claude`                   | ro   |
-| `~/.claude/project`       | `~/.claude/project`           | rw   |
-| `~/.claude.json`          | `~/.claude.json`              | rw   |
-| `~/.nanobot`              | `~/.nanobot`                  | rw   |
-| `~/.gitconfig`            | `~/.gitconfig`                | ro   |
-| `pibox-cache` volume      | `~/.cache`                    | rw   |
-| `/etc/fonts`              | `/etc/fonts`                  | ro   |
-| `/usr/share/fonts`        | `/usr/share/fonts`            | ro   |
-| `/var/cache/fontconfig`   | `/var/cache/fontconfig`       | ro   |
-| host CA bundle            | `/etc/ssl/host-ca-bundle.pem` | ro   |
+| Host                             | Container                     | Mode |
+| -------------------------------- | ----------------------------- | ---- |
+| current working directory        | same absolute path            | rw   |
+| `~/.pi`                          | `~/.pi`                       | rw   |
+| `~/.pi/agent/extensions`         | `~/.pi/agent/extensions`      | ro   |
+| `~/.claude`                      | `~/.claude`                   | ro   |
+| `~/.claude/project`              | `~/.claude/project`           | rw   |
+| `~/.claude.json`                 | `~/.claude.json`              | rw   |
+| `~/.nanobot`                     | `~/.nanobot`                  | rw   |
+| `~/.pi-web` (pi-web only)        | `~/.pi-web`                   | rw   |
+| `~/.config/pi-web` (pi-web only) | `~/.config/pi-web`            | rw   |
+| `~/.gitconfig`                   | `~/.gitconfig`                | ro   |
+| `pibox-cache` volume             | `~/.cache`                    | rw   |
+| `/etc/fonts`                     | `/etc/fonts`                  | ro   |
+| `/usr/share/fonts`               | `/usr/share/fonts`            | ro   |
+| `/var/cache/fontconfig`          | `/var/cache/fontconfig`       | ro   |
+| host CA bundle                   | `/etc/ssl/host-ca-bundle.pem` | ro   |

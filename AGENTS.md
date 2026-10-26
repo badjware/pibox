@@ -22,7 +22,7 @@ common/
 | Flag | Short | Description |
 |---|---|---|
 | `--help` | `-h` | show usage help and exit |
-| `--harness pi\|claude`        | `-H` | agent to run (default: `pi`) |
+| `--harness pi\|claude\|nanobot\|pi-web` | `-H` | agent to run (default: `pi`) |
 | `--build` | | build images locally instead of pulling |
 | `--pull` | | pull latest image before launch |
 | `--unsafe-enable-docker` | (none, intentional) | enable rootless Docker-in-Docker (privileged) |
@@ -32,6 +32,7 @@ common/
 | `--unsafe-host-tmux` | (none, intentional) | mount the tmux socket into the container and forward the tmux environment variable |
 | `--unsafe-host-net` | (none, intentional) | share the host network namespace (`--network=host`) |
 | `--ephemeral`, `--tmp` | `-e` | use a temp workdir |
+| `--workdir` | `-w` | use the given directory as the workdir instead of the current one (incompatible with `--ephemeral`) |
 | `--read-only`, `--ro` | `-r` | mount all volumes read-only |
 | `--volume` | `-v` | bind-mount an extra volume (repeatable; same syntax as `docker run -v`) |
 | `--extra-package` | `-P` | install an extra pacman or AUR package at container startup (repeatable; non-persistent) |
@@ -70,8 +71,14 @@ When adding new unsafe options, always add a call to the `confirm` helper to pro
 |---|---|---|
 | `pi` | `ghcr.io/badjware/pibox:pi` | `pibox:pi` |
 | `claude` | `ghcr.io/badjware/pibox:claude` | `pibox:claude` |
+| `nanobot` | `ghcr.io/badjware/pibox:nanobot` | `pibox:nanobot` |
+| `pi-web` | `ghcr.io/badjware/pibox:pi-web` | `pibox:pi-web` |
 
-Build order when using `--build`: `Dockerfile.base` → `Dockerfile.<harness>`.
+Build order when using `--build`: `Dockerfile.base` → `Dockerfile.<harness>`. `nanobot` and `pi-web` inherit from `pibox:pi`, so `Dockerfile.pi` is built in between.
+
+### pi-web
+
+`pi-web` runs [PI WEB](https://pi-web.dev/) (`@jmfederico/pi-web`). The container has no user service manager, so `common/entrypoint.sh` starts `pi-web-sessiond` in the background and execs `pi-web-server` on `0.0.0.0:8504`. `launch.sh` publishes `127.0.0.1:8504:8504` unless any `--port` is given, in which case only the user's ports are published. With `--unsafe-host-net`, it sets `PI_WEB_HOST=127.0.0.1` instead. `~/.pi-web` and `~/.config/pi-web` are bind-mounted only for this harness.
 
 ## common/image_AGENTS.md
 
