@@ -89,9 +89,3 @@ When editing agent-facing instructions that need to persist from one container r
 ## pi extensions
 
 The host's `~/.pi/agent/extensions` directory is bind-mounted into the container, so any pi extensions installed on the host (including `pi-claude-interop`, which lives in its own repo) are available inside pibox automatically. pibox itself no longer ships any bundled extensions.
-
-## Environment variables forwarded into the container
-
-`ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_DEFAULT_OPUS_MODEL`,
-`ANTHROPIC_DEFAULT_SONNET_MODEL`, `ANTHROPIC_DEFAULT_HAIKU_MODEL`,
-`ANTHROPIC_CUSTOM_HEADERS`, `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`
