@@ -16,11 +16,11 @@ RUN for pkg in tini docker-rootless-extras; do \
 
 FROM archlinux:latest
 
-ARG PLAYWRIGHT_VERSION=1.61.0
-ARG TRAFILATURA_VERSION=2.1.0
+ARG PLAYWRIGHT_VERSION=1.64.1
+ARG TRAFILATURA_VERSION=2.3.1
 
 RUN pacman -Syu --noconfirm --needed \
-        nodejs npm python python-pipx go gcc fd ripgrep jq yq bc zip unzip git vim tmux make diffutils \
+        nodejs npm python python-pipx python-filelock go gcc fd ripgrep jq yq bc zip unzip git vim tmux make diffutils \
         chromium qt6-wayland wl-clipboard \
         ncurses \
         ca-certificates curl \
@@ -28,7 +28,7 @@ RUN pacman -Syu --noconfirm --needed \
         fuse-overlayfs slirp4netns rootlesskit iproute2 containerd iptables \
         kubectl aws-cli-v2
 
-# tini and docker-rootless-extras (built in the aur stage above)
+# built in the aur stage above
 COPY --from=aur /tmp/pkgs /tmp/pkgs
 RUN pacman -U --noconfirm /tmp/pkgs/*.pkg.tar.zst && rm -rf /tmp/pkgs
 
