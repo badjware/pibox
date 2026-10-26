@@ -20,7 +20,7 @@ Four harnesses are supported:
 
 - **Sandboxed execution**: the agent runs inside a container with an ephemeral filesystem.
 - **Host-user mirroring**: files written from inside the container are owned by your host user.
-- **Persistent config**: `~/.pi`, `~/.claude`, and `~/.nanobot` are bind-mounted so settings and sessions survive between runs.
+- **Persistent config**: `~/.pi` is always bind-mounted, and `~/.claude` or `~/.nanobot` is bind-mounted for its harness, so settings and sessions survive between runs.
 - **Optional rootless Docker-in-Docker**: opt in with `--unsafe-enable-docker` when the agent needs to run containers itself.
 - **Pre-built images**: distributed via GitHub Container Registry.
 
@@ -178,20 +178,20 @@ Tools deliberately **not** installed: `sudo`, `ssh`, `scp`, `wget`.
 
 These paths are always bind-mounted.
 
-| Host                             | Container                     | Mode |
-| -------------------------------- | ----------------------------- | ---- |
-| current working directory        | same absolute path            | rw   |
-| `~/.pi`                          | `~/.pi`                       | rw   |
-| `~/.pi/agent/extensions`         | `~/.pi/agent/extensions`      | ro   |
-| `~/.claude`                      | `~/.claude`                   | ro   |
-| `~/.claude/project`              | `~/.claude/project`           | rw   |
-| `~/.claude.json`                 | `~/.claude.json`              | rw   |
-| `~/.nanobot`                     | `~/.nanobot`                  | rw   |
-| `~/.pi-web` (pi-web only)        | `~/.pi-web`                   | rw   |
-| `~/.config/pi-web` (pi-web only) | `~/.config/pi-web`            | rw   |
-| `~/.gitconfig`                   | `~/.gitconfig`                | ro   |
-| `pibox-cache` volume             | `~/.cache`                    | rw   |
-| `/etc/fonts`                     | `/etc/fonts`                  | ro   |
-| `/usr/share/fonts`               | `/usr/share/fonts`            | ro   |
-| `/var/cache/fontconfig`          | `/var/cache/fontconfig`       | ro   |
-| host CA bundle                   | `/etc/ssl/host-ca-bundle.pem` | ro   |
+| Host                              | Container                     | Mode |
+| --------------------------------- | ----------------------------- | ---- |
+| current working directory         | same absolute path            | rw   |
+| `~/.pi`                           | `~/.pi`                       | rw   |
+| `~/.pi/agent/extensions`          | `~/.pi/agent/extensions`      | ro   |
+| `~/.claude` (claude only)         | `~/.claude`                   | ro   |
+| `~/.claude/project` (claude only) | `~/.claude/project`           | rw   |
+| `~/.claude.json` (claude only)    | `~/.claude.json`              | rw   |
+| `~/.nanobot` (nanobot only)       | `~/.nanobot`                  | rw   |
+| `~/.pi-web` (pi-web only)         | `~/.pi-web`                   | rw   |
+| `~/.config/pi-web` (pi-web only)  | `~/.config/pi-web`            | rw   |
+| `~/.gitconfig`                    | `~/.gitconfig`                | ro   |
+| `pibox-cache` volume              | `~/.cache`                    | rw   |
+| `/etc/fonts`                      | `/etc/fonts`                  | ro   |
+| `/usr/share/fonts`                | `/usr/share/fonts`            | ro   |
+| `/var/cache/fontconfig`           | `/var/cache/fontconfig`       | ro   |
+| host CA bundle                    | `/etc/ssl/host-ca-bundle.pem` | ro   |

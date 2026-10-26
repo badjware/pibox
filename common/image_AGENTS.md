@@ -6,8 +6,8 @@ The container is ephemeral; nothing written outside of bind-mounted paths will s
 The following directories are bind-mounted read-write at the same absolute path inside the container:
 - **Working directory**: the host directory from which docker was run, set as the container's working directory.
 - **`~/.pi`**: pi agent configuration and session data, persisted across runs.
-- **`~/.claude`**: Claude Code agent configuration and session data, persisted across runs.
-- **`~/.nanobot`**: nanobot configuration and session data, persisted across runs.
+- **`~/.claude`**: Claude Code agent configuration and session data, persisted across runs (claude harness only).
+- **`~/.nanobot`**: nanobot configuration and session data, persisted across runs (nanobot harness only).
 - **`~/.pi-web`** and **`~/.config/pi-web`**: PI WEB data and configuration, persisted across runs (pi-web harness only).
 
 ## Permissions & safety
