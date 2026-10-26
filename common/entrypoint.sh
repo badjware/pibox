@@ -21,7 +21,7 @@ getent passwd "$HOST_UID" >/dev/null || useradd  -u "$HOST_UID" -g "$HOST_GID" -
 USER_HOME=$(getent passwd "$HOST_UID" | cut -d: -f6)
 export PATH="$USER_HOME/go/bin:$PATH"
 chown "$HOST_UID:$HOST_GID" "$USER_HOME" || true
-for stub in "$USER_HOME/.local" "$USER_HOME/.local/share" "$USER_HOME/.cache" "$USER_HOME/.claude"; do
+for stub in "$USER_HOME/.local" "$USER_HOME/.local/share" "$USER_HOME/.cache" "$USER_HOME/.claude" "$USER_HOME/.config"; do
     if [[ -d "$stub" ]] && [[ "$(stat -c '%u' "$stub")" == "0" ]]; then
         chown "$HOST_UID:$HOST_GID" "$stub" || true
     fi
@@ -164,6 +164,12 @@ install -d -o "$HOST_UID" -g "$HOST_GID" "$USER_HOME/.cache"
 case "$HARNESS" in
     pi)     exec runuser -u "$HOST_USER" -- env PATH="$PATH" pi "$@" ;;
     claude) exec runuser -u "$HOST_USER" -- env PATH="$PATH"  claude --dangerously-skip-permissions "$@" ;;
+    pi-web)
+        # no user service manager in the container, so run both processes directly
+        runuser -u "$HOST_USER" -- env PATH="$PATH" pi-web-sessiond &
+        exec runuser -u "$HOST_USER" -- env PATH="$PATH" \
+            PI_WEB_HOST="${PI_WEB_HOST:-0.0.0.0}" PI_WEB_PORT=8504 pi-web-server "$@"
+        ;;
     nanobot)
         if [[ "$ENABLE_PI_PROVIDER_BRIDGE" == "1" ]]; then
             case "${1:-}" in

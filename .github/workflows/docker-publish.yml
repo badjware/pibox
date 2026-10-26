@@ -102,6 +102,8 @@ jobs:
             base_tag: base
           - harness: nanobot
             base_tag: pi
+          - harness: pi-web
+            base_tag: pi
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

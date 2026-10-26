@@ -17,15 +17,17 @@ Usage: $0 [options] [-- agent-args...]
 
 Options:
   -h, --help                    show this help text and exit
-  -H, --harness pi|claude
+  -H, --harness pi|claude|nanobot|pi-web
                                 agent to run (default: pi)
       --build                   build images locally instead of pulling
       --pull                    pull latest image before launch
   -e, --ephemeral, --tmp        use a temp workdir
+  -w, --workdir DIR             use DIR as the workdir instead of the current directory
   -r, --read-only, --ro         mount all volumes read-only
   -v, --volume VOLUME           bind-mount an extra volume (repeatable)
   -P, --extra-package PACKAGE   install an extra pacman or AUR package at startup (repeatable)
   -p, --port PORT               publish a container port (repeatable; Docker -p syntax)
+                                pi-web listens on 8504; default 127.0.0.1:8504:8504
       --unsafe-enable-docker    enable rootless Docker-in-Docker (privileged)
       --unsafe-enable-aws       mount ~/.aws into the container
       --unsafe-enable-kube      mount ~/.kube into the container
@@ -64,7 +66,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o 'hp:erH:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-tmux,unsafe-host-net,enable-pi-provider-bridge,ephemeral,tmp,read-only,ro,harness:,volume:,extra-package:,port:,sac-moe-patience' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'hp:erw:H:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-tmux,unsafe-host-net,enable-pi-provider-bridge,ephemeral,tmp,workdir:,read-only,ro,harness:,volume:,extra-package:,port:,sac-moe-patience' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
@@ -77,6 +79,7 @@ forward_tmux=0
 net_host=0
 enable_pi_provider_bridge=0
 ephemeral=0
+workdir=""
 read_only=""
 harness="pi"
 skip_confirm=0
@@ -133,6 +136,10 @@ while true; do
             read_only=1
             shift
             ;;
+        -w|--workdir)
+            workdir="$2"
+            shift 2
+            ;;
         -H|--harness)
             harness="$2"
             shift 2
@@ -182,6 +189,14 @@ if [[ "$net_host" -eq 1 && "${#ports[@]}" -gt 0 ]]; then
     exit 2
 fi
 
+if [[ -n "$workdir" ]]; then
+    if [[ "$ephemeral" -eq 1 ]]; then
+        echo "$0: --workdir cannot be used with --ephemeral" >&2
+        exit 2
+    fi
+    WORKDIR="$(cd -- "$workdir" && pwd -P)" || exit 2
+fi
+
 # ensure host dirs exist before bind-mounting so docker doesn't create them as root
 [[ "$enable_aws" -eq 1 ]] && mkdir -p "$HOME/.aws"
 [[ "$enable_kube" -eq 1 ]] && mkdir -p "$HOME/.kube"
@@ -204,6 +219,8 @@ case "$harness" in
             LOCAL_IMAGE="pibox:claude" ;;
     nanobot) REMOTE_IMAGE="ghcr.io/badjware/pibox:nanobot"
             LOCAL_IMAGE="pibox:nanobot" ;;
+    pi-web) REMOTE_IMAGE="ghcr.io/badjware/pibox:pi-web"
+            LOCAL_IMAGE="pibox:pi-web" ;;
     *)      echo "$0: unknown --harness value: $harness" >&2; exit 2 ;;
 esac
 
@@ -230,10 +247,10 @@ if [[ "$build" -eq 1 ]]; then
     fi
     docker build --pull -t pibox:base -f "$SCRIPT_DIR/Dockerfile.base" \
         "${npmrc_secret_args[@]}" "$SCRIPT_DIR"
-    if [[ "$harness" == "nanobot" ]]; then
+    if [[ "$harness" == "nanobot" || "$harness" == "pi-web" ]]; then
         docker build -t pibox:pi -f "$SCRIPT_DIR/Dockerfile.pi" --build-arg BASE_IMAGE=pibox:base \
             "${npmrc_secret_args[@]}" "$SCRIPT_DIR"
-        docker build -t "$IMAGE_NAME" -f "$SCRIPT_DIR/Dockerfile.nanobot" --build-arg BASE_IMAGE=pibox:pi \
+        docker build -t "$IMAGE_NAME" -f "$SCRIPT_DIR/Dockerfile.$harness" --build-arg BASE_IMAGE=pibox:pi \
             "${npmrc_secret_args[@]}" "$SCRIPT_DIR"
     else
         docker build -t "$IMAGE_NAME" -f "$SCRIPT_DIR/Dockerfile.$harness" --build-arg BASE_IMAGE=pibox:base \
@@ -276,6 +293,15 @@ fi
 for port in "${ports[@]}"; do
     docker_extra_args+=("-p" "$port")
 done
+
+if [[ "$harness" == "pi-web" ]]; then
+    if [[ "$net_host" -eq 1 ]]; then
+        # the host network namespace exposes 0.0.0.0 on every host interface
+        docker_extra_args+=("-e" "PI_WEB_HOST=127.0.0.1")
+    elif [[ "${#ports[@]}" -eq 0 ]]; then
+        docker_extra_args+=("-p" "127.0.0.1:8504:8504")
+    fi
+fi
 
 if [[ "$forward_wayland" -eq 1 ]]; then
     if [[ -z "${WAYLAND_DISPLAY:-}" ]]; then
@@ -346,6 +372,11 @@ _vol_register "$HOME/.claude:/home/$HOST_USER/.claude:ro"
 _vol_register "$HOME/.claude/project:/home/$HOST_USER/.claude/project:rw" # claude projects folder is always rw
 _vol_register "$HOME/.claude.json:/home/$HOST_USER/.claude.json:rw" # claude really hates to have its config file read-only
 _vol_register "$HOME/.nanobot:/home/$HOST_USER/.nanobot:rw"
+if [[ "$harness" == "pi-web" ]]; then
+    mkdir -p "$HOME/.pi-web" "$HOME/.config/pi-web"
+    _vol_register "$HOME/.pi-web:/home/$HOST_USER/.pi-web:rw"
+    _vol_register "$HOME/.config/pi-web:/home/$HOST_USER/.config/pi-web:rw"
+fi
 _vol_register "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro"
 _vol_register "pibox-cache:/home/$HOST_USER/.cache:rw"
 _vol_register "/etc/fonts:/etc/fonts:ro"

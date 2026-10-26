@@ -5,8 +5,9 @@ _pibox() {
         '--help[show help text and exit]' \
         '--build[build images locally instead of pulling]' \
         '--pull[pull latest image before launch]' \
-        '--harness[agent to run]:harness:(pi claude nanobot)' \
+        '--harness[agent to run]:harness:(pi claude nanobot pi-web)' \
         '--ephemeral[use a temp workdir]' \
+        '--workdir[use a directory as the workdir instead of the current one]:directory:_files -/' \
         '--read-only[mount all volumes read-only]' \
         '*--volume[bind-mount an extra volume]:volume:_files' \
         '*--extra-package[install an extra pacman or AUR package at startup]:package:' \
