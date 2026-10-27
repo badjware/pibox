@@ -7,20 +7,19 @@ executes against your working directory without having unrestricted access to
 your host system. The container mirrors your host user (UID/GID/name) so files
 created inside the container keep consistent ownership on the host.
 
-Four harnesses are supported:
+Three harnesses are supported:
 
 | Harness        | Agent                                                    | Image                            |
 | -------------- | -------------------------------------------------------- | -------------------------------- |
 | `pi` (default) | [pi](https://github.com/earendil-works/pi)               | `ghcr.io/badjware/pibox:pi`      |
 | `claude`       | [Claude Code](https://github.com/anthropics/claude-code) | `ghcr.io/badjware/pibox:claude`  |
-| `nanobot`      | [nanobot](https://github.com/HKUDS/nanobot)              | `ghcr.io/badjware/pibox:nanobot` |
 | `pi-web`       | [PI WEB](https://pi-web.dev/), a web UI for pi           | `ghcr.io/badjware/pibox:pi-web`  |
 
 ## Features
 
 - **Sandboxed execution**: the agent runs inside a container with an ephemeral filesystem.
 - **Host-user mirroring**: files written from inside the container are owned by your host user.
-- **Persistent config**: `~/.pi` is always bind-mounted, and `~/.claude` or `~/.nanobot` is bind-mounted for its harness, so settings and sessions survive between runs.
+- **Persistent config**: `~/.pi` is always bind-mounted, and `~/.claude` is bind-mounted for the claude harness, so settings and sessions survive between runs.
 - **Optional rootless Docker-in-Docker**: opt in with `--unsafe-enable-docker` when the agent needs to run containers itself.
 - **Pre-built images**: distributed via GitHub Container Registry.
 
@@ -59,7 +58,7 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 | Flag                                    | Short | Description                                                                                                                   |
 | --------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `--help`                                | `-h`  | Show usage help and exit.                                                                                                     |
-| `--harness pi\|claude\|nanobot\|pi-web` | `-H`  | Choose the agent to run. Defaults to `pi`.                                                                                    |
+| `--harness pi\|claude\|pi-web`          | `-H`  | Choose the agent to run. Defaults to `pi`.                                                                                    |
 | `--build`                               |       | Build the image locally from the Dockerfiles instead of using the published image.                                            |
 | `--pull`                                |       | Update the image prior to launching.                                                                                          |
 | `--unsafe-enable-docker`                |       | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers.                             |
@@ -68,7 +67,6 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 | `--unsafe-host-wayland`                 |       | Mount the Wayland socket into the container and forward Wayland environment variables.                                        |
 | `--unsafe-host-tmux`                    |       | Mount the tmux socket into the container and forward the tmux environment variable.                                           |
 | `--unsafe-host-net`                     |       | Share the host network namespace.                                                                                             |
-| `--enable-pi-provider-bridge`           |       | Configure nanobot's models from pi. Requires `--harness nanobot`.                                                             |
 | `--ephemeral`, `--tmp`                  | `-e`  | Start in a temporary working directory instead of the current one.                                                            |
 | `--workdir <dir>`                       | `-w`  | Use `<dir>` as the working directory instead of the current one. Incompatible with `--ephemeral`.                             |
 | `--read-only`, `--ro`                   | `-r`  | Mount all volumes as read-only inside the container.                                                                          |
@@ -92,24 +90,6 @@ Launch Claude Code:
 ./launch.sh --harness claude
 ```
 
-Launch nanobot with its own configuration:
-
-```sh
-./launch.sh --harness nanobot
-```
-
-Launch nanobot using models explicitly configured in pi:
-
-```sh
-./launch.sh --harness nanobot --enable-pi-provider-bridge
-```
-
-The bridge imports models that `pi --offline --list-models` reports as available,
-then resolves API keys through `pi auth`. It reads `~/.pi/agent/models.json` for
-custom provider settings. It writes `~/.nanobot/pibox-config.json` with owner-only
-permissions and leaves `~/.nanobot/config.json` unchanged. OAuth providers and
-providers nanobot cannot represent are skipped.
-
 Launch PI WEB and open http://127.0.0.1:8504:
 
 ```sh
@@ -118,7 +98,9 @@ Launch PI WEB and open http://127.0.0.1:8504:
 
 By default, pi-web is published on `127.0.0.1:8504` only. Any `--port` replaces
 that mapping. pi-web listens on port 8504 inside the container, so target it
-explicitly, for example `--port 0.0.0.0:9000:8504`. PI WEB assumes
+explicitly, for example `--port 0.0.0.0:9000:8504`. Set `PIBOX_PI_WEB_PORT` to
+change the default host port. With `--unsafe-host-net`, pi-web binds
+`127.0.0.1:${PIBOX_PI_WEB_PORT:-8504}` directly on the host. PI WEB assumes
 trusted users; only expose it on a trusted network.
 
 Pass arguments through to the agent (everything after `--` is forwarded):
@@ -186,7 +168,6 @@ These paths are always bind-mounted.
 | `~/.claude` (claude only)         | `~/.claude`                   | ro   |
 | `~/.claude/project` (claude only) | `~/.claude/project`           | rw   |
 | `~/.claude.json` (claude only)    | `~/.claude.json`              | rw   |
-| `~/.nanobot` (nanobot only)       | `~/.nanobot`                  | rw   |
 | `~/.pi-web` (pi-web only)         | `~/.pi-web`                   | rw   |
 | `~/.config/pi-web` (pi-web only)  | `~/.config/pi-web`            | rw   |
 | `~/.gitconfig`                    | `~/.gitconfig`                | ro   |

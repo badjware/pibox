@@ -17,7 +17,7 @@ Usage: $0 [options] [-- agent-args...]
 
 Options:
   -h, --help                    show this help text and exit
-  -H, --harness pi|claude|nanobot|pi-web
+  -H, --harness pi|claude|pi-web
                                 agent to run (default: pi)
       --build                   build images locally instead of pulling
       --pull                    pull latest image before launch
@@ -34,8 +34,6 @@ Options:
       --unsafe-host-wayland     mount the Wayland socket into the container
       --unsafe-host-tmux        mount the tmux socket into the container
       --unsafe-host-net         share the host network namespace
-      --enable-pi-provider-bridge
-                                configure nanobot models from pi
 
 Anything after -- is forwarded to the agent inside the container.
 EOF
@@ -63,7 +61,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o 'hp:erw:H:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-tmux,unsafe-host-net,enable-pi-provider-bridge,ephemeral,tmp,workdir:,read-only,ro,harness:,volume:,extra-package:,port:,sac-moe-patience' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'hp:erw:H:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-tmux,unsafe-host-net,ephemeral,tmp,workdir:,read-only,ro,harness:,volume:,extra-package:,port:,sac-moe-patience' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
@@ -74,7 +72,6 @@ enable_kube=0
 forward_wayland=0
 forward_tmux=0
 net_host=0
-enable_pi_provider_bridge=0
 ephemeral=0
 workdir=""
 read_only=""
@@ -119,10 +116,6 @@ while true; do
             ;;
         --unsafe-host-net)
             net_host=1
-            shift
-            ;;
-        --enable-pi-provider-bridge)
-            enable_pi_provider_bridge=1
             shift
             ;;
         -e|--ephemeral|--tmp)
@@ -214,17 +207,10 @@ case "$harness" in
             LOCAL_IMAGE="pibox:pi" ;;
     claude) REMOTE_IMAGE="ghcr.io/badjware/pibox:claude"
             LOCAL_IMAGE="pibox:claude" ;;
-    nanobot) REMOTE_IMAGE="ghcr.io/badjware/pibox:nanobot"
-            LOCAL_IMAGE="pibox:nanobot" ;;
     pi-web) REMOTE_IMAGE="ghcr.io/badjware/pibox:pi-web"
             LOCAL_IMAGE="pibox:pi-web" ;;
     *)      echo "$0: unknown --harness value: $harness" >&2; exit 2 ;;
 esac
-
-if [[ "$enable_pi_provider_bridge" -eq 1 && "$harness" != "nanobot" ]]; then
-    echo "$0: --enable-pi-provider-bridge requires --harness nanobot" >&2
-    exit 2
-fi
 
 # save sessions alongside the original workdir when running in ephemeral mode on pi
 if [[ "$ephemeral" -eq 1 && "$harness" == "pi" ]]; then
@@ -244,7 +230,7 @@ if [[ "$build" -eq 1 ]]; then
     fi
     docker build --pull -t pibox:base -f "$SCRIPT_DIR/Dockerfile.base" \
         "${npmrc_secret_args[@]}" "$SCRIPT_DIR"
-    if [[ "$harness" == "nanobot" || "$harness" == "pi-web" ]]; then
+    if [[ "$harness" == "pi-web" ]]; then
         docker build -t pibox:pi -f "$SCRIPT_DIR/Dockerfile.pi" --build-arg BASE_IMAGE=pibox:base \
             "${npmrc_secret_args[@]}" "$SCRIPT_DIR"
         docker build -t "$IMAGE_NAME" -f "$SCRIPT_DIR/Dockerfile.$harness" --build-arg BASE_IMAGE=pibox:pi \
@@ -294,7 +280,7 @@ done
 if [[ "$harness" == "pi-web" ]]; then
     if [[ "$net_host" -eq 1 ]]; then
         # the host network namespace exposes 0.0.0.0 on every host interface
-        docker_extra_args+=("-e" "PI_WEB_HOST=127.0.0.1")
+        docker_extra_args+=("-e" "PI_WEB_HOST=127.0.0.1" "-e" "PI_WEB_PORT=${PIBOX_PI_WEB_PORT:-8504}")
     elif [[ "${#ports[@]}" -eq 0 ]]; then
         docker_extra_args+=("-p" "127.0.0.1:${PIBOX_PI_WEB_PORT:-8504}:8504")
     fi
@@ -370,10 +356,6 @@ if [[ "$harness" == "claude" ]]; then
     touch "$HOME/.claude.json"
     _vol_register "$HOME/.claude:/home/$HOST_USER/.claude:rw"
 fi
-if [[ "$harness" == "nanobot" ]]; then
-    mkdir -p "$HOME/.nanobot"
-    _vol_register "$HOME/.nanobot:/home/$HOST_USER/.nanobot:rw"
-fi
 if [[ "$harness" == "pi-web" ]]; then
     mkdir -p "$HOME/.pi-web" "$HOME/.config/pi-web"
     _vol_register "$HOME/.pi-web:/home/$HOST_USER/.pi-web:rw"
@@ -444,7 +426,6 @@ exec docker run --rm \
     -e "HOST_GID=$HOST_GID" \
     -e "HOST_USER=$HOST_USER" \
     -e "HARNESS=$harness" \
-    -e "ENABLE_PI_PROVIDER_BRIDGE=$enable_pi_provider_bridge" \
     -e "EXTRA_PACKAGES=${extra_packages[*]}" \
     ${host_ca:+-e "SSL_CERT_FILE=/etc/ssl/host-ca-bundle.pem"} \
     -w "$WORKDIR" \

@@ -100,8 +100,6 @@ jobs:
         include:
           - harness: claude
             base_tag: base
-          - harness: nanobot
-            base_tag: pi
           - harness: pi-web
             base_tag: pi
     steps:
