@@ -6,7 +6,6 @@ HOST_GID="${HOST_GID:?HOST_GID environment variable is required}"
 HOST_USER="${HOST_USER:?HOST_USER environment variable is required}"
 ENABLE_DOCKER="${ENABLE_DOCKER:-0}"
 HARNESS="${HARNESS:-pi}"
-ENABLE_PI_PROVIDER_BRIDGE="${ENABLE_PI_PROVIDER_BRIDGE:-0}"
 
 # ---------------------------------------------------------------------------
 # Mirror the host user inside the container so bind-mounted files keep
@@ -168,27 +167,7 @@ case "$HARNESS" in
         # no user service manager in the container, so run both processes directly
         runuser -u "$HOST_USER" -- env PATH="$PATH" pi-web-sessiond &
         exec runuser -u "$HOST_USER" -- env PATH="$PATH" \
-            PI_WEB_HOST="${PI_WEB_HOST:-0.0.0.0}" PI_WEB_PORT=8504 pi-web-server "$@"
-        ;;
-    nanobot)
-        if [[ "$ENABLE_PI_PROVIDER_BRIDGE" == "1" ]]; then
-            case "${1:-}" in
-                ""|-h|--help|-v|--version)
-                    exec runuser -u "$HOST_USER" -- env env PATH="$PATH" nanobot "$@"
-                    ;;
-            esac
-            for arg in "$@"; do
-                case "$arg" in
-                    -c|--config|-c=*|--config=*)
-                        echo "entrypoint: --config cannot be used with --enable-pi-provider-bridge" >&2
-                        exit 2
-                        ;;
-                esac
-            done
-            runuser -u "$HOST_USER" -- env PATH="$PATH"  python3 /usr/local/lib/pibox/nanobot_pi_bridge.py
-            exec runuser -u "$HOST_USER" -- env PATH="$PATH" nanobot "$@" --config "$USER_HOME/.nanobot/pibox-config.json"
-        fi
-        exec runuser -u "$HOST_USER" -- env PATH="$PATH" nanobot "$@"
+            PI_WEB_HOST="${PI_WEB_HOST:-0.0.0.0}" PI_WEB_PORT="${PI_WEB_PORT:-8504}" pi-web-server "$@"
         ;;
     *)      echo "entrypoint: unknown HARNESS: $HARNESS" >&2; exit 2 ;;
 esac

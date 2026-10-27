@@ -5,7 +5,7 @@ _pibox() {
         '--help[show help text and exit]' \
         '--build[build images locally instead of pulling]' \
         '--pull[pull latest image before launch]' \
-        '--harness[agent to run]:harness:(pi claude nanobot pi-web)' \
+        '--harness[agent to run]:harness:(pi claude pi-web)' \
         '--ephemeral[use a temp workdir]' \
         '--workdir[use a directory as the workdir instead of the current one]:directory:_files -/' \
         '--read-only[mount all volumes read-only]' \
@@ -18,7 +18,6 @@ _pibox() {
         '--unsafe-host-wayland[mount the Wayland socket into the container]' \
         '--unsafe-host-tmux[mount the tmux socket into the container]' \
         '--unsafe-host-net[share the host network namespace]' \
-        '--enable-pi-provider-bridge[configure nanobot models from pi]' \
         '(-)--[forward remaining args to the agent]:: :_default'
 }
 

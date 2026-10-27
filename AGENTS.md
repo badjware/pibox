@@ -22,7 +22,7 @@ common/
 | Flag | Short | Description |
 |---|---|---|
 | `--help` | `-h` | show usage help and exit |
-| `--harness pi\|claude\|nanobot\|pi-web` | `-H` | agent to run (default: `pi`) |
+| `--harness pi\|claude\|pi-web` | `-H` | agent to run (default: `pi`) |
 | `--build` | | build images locally instead of pulling |
 | `--pull` | | pull latest image before launch |
 | `--unsafe-enable-docker` | (none, intentional) | enable rootless Docker-in-Docker (privileged) |
@@ -71,16 +71,15 @@ When adding new unsafe options, always add a call to the `confirm` helper to pro
 |---|---|---|
 | `pi` | `ghcr.io/badjware/pibox:pi` | `pibox:pi` |
 | `claude` | `ghcr.io/badjware/pibox:claude` | `pibox:claude` |
-| `nanobot` | `ghcr.io/badjware/pibox:nanobot` | `pibox:nanobot` |
 | `pi-web` | `ghcr.io/badjware/pibox:pi-web` | `pibox:pi-web` |
 
-`~/.claude` (with `~/.claude.json`) is bind-mounted only for the `claude` harness, and `~/.nanobot` only for the `nanobot` harness.
+`~/.claude` (with `~/.claude.json`) is bind-mounted only for the `claude` harness.
 
-Build order when using `--build`: `Dockerfile.base` → `Dockerfile.<harness>`. `nanobot` and `pi-web` inherit from `pibox:pi`, so `Dockerfile.pi` is built in between.
+Build order when using `--build`: `Dockerfile.base` → `Dockerfile.<harness>`. `pi-web` inherits from `pibox:pi`, so `Dockerfile.pi` is built in between.
 
 ### pi-web
 
-`pi-web` runs [PI WEB](https://pi-web.dev/) (`@jmfederico/pi-web`). The container has no user service manager, so `common/entrypoint.sh` starts `pi-web-sessiond` in the background and execs `pi-web-server` on `0.0.0.0:8504`. `launch.sh` publishes `127.0.0.1:8504:8504` unless any `--port` is given, in which case only the user's ports are published. With `--unsafe-host-net`, it sets `PI_WEB_HOST=127.0.0.1` instead. `~/.pi-web` and `~/.config/pi-web` are bind-mounted only for this harness.
+`pi-web` runs [PI WEB](https://pi-web.dev/) (`@jmfederico/pi-web`). The container has no user service manager, so `common/entrypoint.sh` starts `pi-web-sessiond` in the background and execs `pi-web-server` on `0.0.0.0:8504`. `launch.sh` publishes `127.0.0.1:${PIBOX_PI_WEB_PORT:-8504}:8504` unless any `--port` is given, in which case only the user's ports are published. With `--unsafe-host-net`, it sets `PI_WEB_HOST=127.0.0.1` and `PI_WEB_PORT=${PIBOX_PI_WEB_PORT:-8504}` instead, since there is no port mapping. `~/.pi-web` and `~/.config/pi-web` are bind-mounted only for this harness.
 
 ## common/image_AGENTS.md
 
