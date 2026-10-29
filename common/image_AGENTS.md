@@ -11,7 +11,3 @@ The following directories are bind-mounted read-write at the same absolute path 
 
 ## Permissions & safety
 You are running as a user that mirrors the host's UID, GID, and username, so file ownership is consistent between host and container. You do not have root access.
-
-- **Never** attempt to switch user or execute a command as a different user (eg: `sudo su`).
-- **Never** attempt to install packages yourself. If you require additional tools, **stop** and ask the user to install them for you.
-- **Never** `git push`. **Always** `git commit` with explicit user authorization.
