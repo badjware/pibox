@@ -18,6 +18,7 @@ FROM archlinux:latest
 
 ARG PLAYWRIGHT_VERSION=1.64.1
 ARG TRAFILATURA_VERSION=2.3.1
+ARG GCX_VERSION=1.7.1
 
 RUN pacman -Syu --noconfirm --needed \
         nodejs npm python python-pipx python-filelock go gcc fd ripgrep jq yq bc zip unzip git vim tmux make diffutils \
@@ -35,6 +36,8 @@ RUN pacman -U --noconfirm /tmp/pkgs/*.pkg.tar.zst && rm -rf /tmp/pkgs
 ENV EDITOR=vim
 ENV NODE_PATH=/usr/local/lib/node_modules:/usr/lib/node_modules
 ENV PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin
+# no Secret Service in the container
+ENV GCX_KEYCHAIN=off
 
 # playwright
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
@@ -42,6 +45,10 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
 
 # trafilatura
 RUN pipx install trafilatura==${TRAFILATURA_VERSION}
+
+# gcx (Grafana CLI)
+RUN GOPATH=/tmp/go GOBIN=/usr/local/bin go install github.com/grafana/gcx/cmd/gcx@v${GCX_VERSION} \
+    && rm -rf /tmp/go /root/.cache/go-build
 
 # cleanup
 RUN pacman -Rns --noconfirm sudo openssh 2>/dev/null || true \

@@ -151,7 +151,7 @@ The container ships with a set of tools suited to a coding agent:
 - `node`, `python` (Python 3), `go`, `gcc`, `make`
 - `fd`, `rg`, `jq`, `yq`, `bc`, `zip`, `unzip`, `diffutils`, `curl`
 - `docker` + `docker compose`
-- `kubectl`, `aws` (aws-cli)
+- `kubectl`, `aws` (aws-cli), `gcx` (Grafana CLI)
 - `chromium`, `wl-clipboard`, `patchright` (Playwright), `trafilatura`
 
 Tools deliberately **not** installed: `sudo`, `ssh`, `scp`, `wget`.
