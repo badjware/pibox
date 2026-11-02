@@ -10,6 +10,7 @@ _pibox() {
         '--workdir[use a directory as the workdir instead of the current one]:directory:_files -/' \
         '--read-only[mount all volumes read-only]' \
         '*--volume[bind-mount an extra volume]:volume:_files' \
+        '*--mount[add a mount (Docker --mount syntax)]:mount:' \
         '*--extra-package[install an extra pacman or AUR package at startup]:package:' \
         '*--port[publish a container port (Docker -p syntax)]:port:' \
         '--unsafe-enable-docker[enable rootless Docker-in-Docker (privileged)]' \

@@ -4,6 +4,7 @@
 
 pibox wraps AI coding agents (pi and Claude Code) inside a sandboxed Docker container.
 The working directory is bind-mounted into the container so the agent operates on host files with matching UID/GID ownership.
+The workdir mount uses `rslave` propagation (except with `--ephemeral`), so mounts made on the host under the workdir after launch appear in the container. Docker refuses to start if the host mount containing the workdir is private (neither shared nor slave).
 
 ## Repository layout
 
@@ -35,6 +36,7 @@ common/
 | `--workdir` | `-w` | use the given directory as the workdir instead of the current one (incompatible with `--ephemeral`) |
 | `--read-only`, `--ro` | `-r` | mount all volumes read-only |
 | `--volume` | `-v` | bind-mount an extra volume (repeatable; same syntax as `docker run -v`) |
+| `--mount` | `-m` | add a mount (repeatable; same syntax as `docker run --mount`; passed through without deduplication or `--read-only`) |
 | `--extra-package` | `-P` | install an extra pacman or AUR package at container startup (repeatable; non-persistent) |
 | `--port` | `-p` | publish a container port (repeatable; Docker `-p` syntax) |
 | `--` | | remaining args forwarded to the agent inside the container |

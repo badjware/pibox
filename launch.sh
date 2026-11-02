@@ -25,6 +25,7 @@ Options:
   -w, --workdir DIR             use DIR as the workdir instead of the current directory
   -r, --read-only, --ro         mount all volumes read-only
   -v, --volume VOLUME           bind-mount an extra volume (repeatable)
+  -m, --mount MOUNT             add a mount (repeatable)
   -P, --extra-package PACKAGE   install an extra pacman or AUR package at startup (repeatable)
   -p, --port PORT               publish a container port (repeatable; Docker -p syntax)
                                 pi-web listens on 8504; default 127.0.0.1:8504:8504
@@ -61,7 +62,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o 'hp:erw:H:v:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-tmux,unsafe-host-net,ephemeral,tmp,workdir:,read-only,ro,harness:,volume:,extra-package:,port:,sac-moe-patience' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'hp:erw:H:v:m:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-host-wayland,unsafe-host-tmux,unsafe-host-net,ephemeral,tmp,workdir:,read-only,ro,harness:,volume:,mount:,extra-package:,port:,sac-moe-patience' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
@@ -136,6 +137,10 @@ while true; do
             ;;
         -v|--volume)
             volumes+=("$2")
+            shift 2
+            ;;
+        -m|--mount)
+            docker_extra_args+=("--mount" "$2")
             shift 2
             ;;
         -P|--extra-package)
@@ -399,9 +404,12 @@ done
 if [[ "$WORKDIR" == "$HOME" && -z "$read_only" && -n "${_vol_map[$WORKDIR]+x}" ]]; then
     : # user-provided -v for the home workdir wins; leave it as registered
 elif [[ "$WORKDIR" == "$HOME" && -z "$read_only" ]]; then
-    _vol_register "$WORKDIR:$WORKDIR:ro"
+    _vol_register "$WORKDIR:$WORKDIR:ro,rslave"
 else
-    _vol_register "$WORKDIR:$WORKDIR${read_only:+:ro}"
+    # the ephemeral workdir sits under /tmp, which may be a private mount
+    workdir_opts="${read_only:+ro}"
+    [[ "$ephemeral" -eq 0 ]] && workdir_opts="${workdir_opts:+$workdir_opts,}rslave"
+    _vol_register "$WORKDIR:$WORKDIR${workdir_opts:+:$workdir_opts}"
 fi
 
 for dest in "${_vol_keys[@]}"; do
