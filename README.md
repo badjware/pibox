@@ -64,6 +64,7 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 | `--unsafe-enable-docker`                |       | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers.                             |
 | `--unsafe-enable-aws`                   |       | Mount `~/.aws` into the container.                                                                                            |
 | `--unsafe-enable-kube`                  |       | Mount `~/.kube` into the container.                                                                                           |
+| `--unsafe-enable-gcx`                   |       | Mount `~/.config/gcx` into the container.                                                                                     |
 | `--unsafe-host-wayland`                 |       | Mount the Wayland socket into the container and forward Wayland environment variables.                                        |
 | `--unsafe-host-tmux`                    |       | Mount the tmux socket into the container and forward the tmux environment variable.                                           |
 | `--unsafe-host-net`                     |       | Share the host network namespace.                                                                                             |

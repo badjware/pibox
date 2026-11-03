@@ -29,6 +29,7 @@ common/
 | `--unsafe-enable-docker` | (none, intentional) | enable rootless Docker-in-Docker (privileged) |
 | `--unsafe-enable-aws` | (none, intentional) | mount `~/.aws` into the container (awscli is pre-installed) |
 | `--unsafe-enable-kube` | (none, intentional) | mount `~/.kube` into the container (kubectl is pre-installed) |
+| `--unsafe-enable-gcx` | (none, intentional) | mount `~/.config/gcx` into the container (gcx is pre-installed) |
 | `--unsafe-host-wayland` | (none, intentional) | mount the Wayland socket into the container and forward Wayland env vars |
 | `--unsafe-host-tmux` | (none, intentional) | mount the tmux socket into the container and forward the tmux environment variable |
 | `--unsafe-host-net` | (none, intentional) | share the host network namespace (`--network=host`) |
