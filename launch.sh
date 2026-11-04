@@ -25,6 +25,7 @@ Options:
   -w, --workdir DIR             use DIR as the workdir instead of the current directory
   -r, --read-only, --ro         mount all volumes read-only
   -v, --volume VOLUME           bind-mount an extra volume (repeatable)
+                                PATH or PATH:ro|rw mounts PATH at the same path
   -m, --mount MOUNT             add a mount (repeatable)
   -P, --extra-package PACKAGE   install an extra pacman or AUR package at startup (repeatable)
   -p, --port PORT               publish a container port (repeatable; Docker -p syntax)
@@ -142,7 +143,14 @@ while true; do
             shift 2
             ;;
         -v|--volume)
-            volumes+=("$2")
+            # PATH or PATH:ro|rw is shorthand for a bind mount at the same path
+            if [[ "$2" != *:* || "$2" =~ ^[^:]+:(ro|rw)$ ]]; then
+                src="$(realpath -e -- "${2%%:*}")"
+                [[ "$2" == *:* ]] && opts=":${2#*:}" || opts=""
+                volumes+=("$src:$src$opts")
+            else
+                volumes+=("$2")
+            fi
             shift 2
             ;;
         -m|--mount)

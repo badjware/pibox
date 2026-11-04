@@ -36,7 +36,7 @@ common/
 | `--ephemeral`, `--tmp` | `-e` | use a temp workdir |
 | `--workdir` | `-w` | use the given directory as the workdir instead of the current one (incompatible with `--ephemeral`) |
 | `--read-only`, `--ro` | `-r` | mount all volumes read-only |
-| `--volume` | `-v` | bind-mount an extra volume (repeatable; same syntax as `docker run -v`) |
+| `--volume` | `-v` | bind-mount an extra volume (repeatable; same syntax as `docker run -v`, except `PATH` or `PATH:ro\|rw` bind-mounts `PATH` at the same absolute path) |
 | `--mount` | `-m` | add a mount (repeatable; same syntax as `docker run --mount`; passed through without deduplication or `--read-only`) |
 | `--extra-package` | `-P` | install an extra pacman or AUR package at container startup (repeatable; non-persistent) |
 | `--port` | `-p` | publish a container port (repeatable; Docker `-p` syntax) |
