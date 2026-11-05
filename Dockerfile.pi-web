@@ -1,9 +1,10 @@
 ARG BASE_IMAGE=pibox:pi
 FROM ${BASE_IMAGE}
 
-ARG PI_WEB_VERSION=1.202611.0
-PORT 8504
+ARG PI_WEB_VERSION=0.15.0
+ENV PI_WEB_NO_OPEN=1
+EXPOSE 30141
 
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     npm install -g --allow-scripts=node-pty \
-        @jmfederico/pi-web@${PI_WEB_VERSION}
+        @agegr/pi-web@${PI_WEB_VERSION}

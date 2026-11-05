@@ -2,7 +2,7 @@
 Description=pibox pi-web socket
 
 [Socket]
-ListenStream=127.0.0.1:8504
+ListenStream=127.0.0.1:30141
 Service=pibox-pi-web-proxy.service
 
 [Install]

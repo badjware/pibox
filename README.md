@@ -9,11 +9,11 @@ created inside the container keep consistent ownership on the host.
 
 Three harnesses are supported:
 
-| Harness        | Agent                                                    | Image                            |
-| -------------- | -------------------------------------------------------- | -------------------------------- |
-| `pi` (default) | [pi](https://github.com/earendil-works/pi)               | `ghcr.io/badjware/pibox:pi`      |
-| `claude`       | [Claude Code](https://github.com/anthropics/claude-code) | `ghcr.io/badjware/pibox:claude`  |
-| `pi-web`       | [PI WEB](https://pi-web.dev/), a web UI for pi           | `ghcr.io/badjware/pibox:pi-web`  |
+| Harness        | Agent                                                      | Image                            |
+| -------------- | ---------------------------------------------------------- | -------------------------------- |
+| `pi` (default) | [pi](https://github.com/earendil-works/pi)                 | `ghcr.io/badjware/pibox:pi`      |
+| `claude`       | [Claude Code](https://github.com/anthropics/claude-code)   | `ghcr.io/badjware/pibox:claude`  |
+| `pi-web`       | [Pi Web](https://github.com/agegr/pi-web), a web UI for pi | `ghcr.io/badjware/pibox:pi-web`  |
 
 ## Features
 
@@ -91,18 +91,18 @@ Launch Claude Code:
 ./launch.sh --harness claude
 ```
 
-Launch PI WEB and open http://127.0.0.1:8504:
+Launch Pi Web and open http://127.0.0.1:30141:
 
 ```sh
 ./launch.sh --harness pi-web
 ```
 
-By default, pi-web is published on `127.0.0.1:8504` only. Any `--port` replaces
-that mapping. pi-web listens on port 8504 inside the container, so target it
-explicitly, for example `--port 0.0.0.0:9000:8504`. Set `PIBOX_PI_WEB_PORT` to
+By default, pi-web is published on `127.0.0.1:30141` only. Any `--port` replaces
+that mapping. pi-web listens on port 30141 inside the container, so target it
+explicitly, for example `--port 0.0.0.0:9000:30141`. Set `PIBOX_PI_WEB_PORT` to
 change the default host port. With `--unsafe-host-net`, pi-web binds
-`127.0.0.1:${PIBOX_PI_WEB_PORT:-8504}` directly on the host. PI WEB assumes
-trusted users; only expose it on a trusted network.
+`127.0.0.1:${PIBOX_PI_WEB_PORT:-30141}` directly on the host. Pi Web has no
+authentication by default; only expose it on a trusted network.
 
 Pass arguments through to the agent (everything after `--` is forwarded):
 
@@ -169,8 +169,6 @@ These paths are always bind-mounted.
 | `~/.claude` (claude only)         | `~/.claude`                   | ro   |
 | `~/.claude/project` (claude only) | `~/.claude/project`           | rw   |
 | `~/.claude.json` (claude only)    | `~/.claude.json`              | rw   |
-| `~/.pi-web` (pi-web only)         | `~/.pi-web`                   | rw   |
-| `~/.config/pi-web` (pi-web only)  | `~/.config/pi-web`            | rw   |
 | `~/.gitconfig`                    | `~/.gitconfig`                | ro   |
 | `pibox-cache` volume              | `~/.cache`                    | rw   |
 | `/etc/fonts`                      | `/etc/fonts`                  | ro   |

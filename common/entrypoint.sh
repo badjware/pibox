@@ -163,11 +163,7 @@ install -d -o "$HOST_UID" -g "$HOST_GID" "$USER_HOME/.cache"
 case "$HARNESS" in
     pi)     exec runuser -u "$HOST_USER" -- env PATH="$PATH" pi "$@" ;;
     claude) exec runuser -u "$HOST_USER" -- env PATH="$PATH"  claude --dangerously-skip-permissions "$@" ;;
-    pi-web)
-        # no user service manager in the container, so run both processes directly
-        runuser -u "$HOST_USER" -- env PATH="$PATH" pi-web-sessiond &
-        exec runuser -u "$HOST_USER" -- env PATH="$PATH" \
-            PI_WEB_HOST="${PI_WEB_HOST:-0.0.0.0}" PI_WEB_PORT="${PI_WEB_PORT:-8504}" pi-web-server "$@"
-        ;;
+    pi-web) exec runuser -u "$HOST_USER" -- env PATH="$PATH" \
+                PI_WEB_HOSTNAME="${PI_WEB_HOSTNAME:-0.0.0.0}" PORT="${PORT:-30141}" pi-web "$@" ;;
     *)      echo "entrypoint: unknown HARNESS: $HARNESS" >&2; exit 2 ;;
 esac

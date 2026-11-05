@@ -7,7 +7,6 @@ The following directories are bind-mounted read-write by default at the same abs
 - **Working directory**: the host directory from which docker was run, set as the container's working directory.
 - **`~/.pi`**: pi agent configuration and session data, persisted across runs.
 - **`~/.claude`**: Claude Code agent configuration and session data, persisted across runs (claude harness only).
-- **`~/.pi-web`** and **`~/.config/pi-web`**: PI WEB data and configuration, persisted across runs (pi-web harness only).
 
 ## Permissions & safety
 You are running as a user that mirrors the host's UID, GID, and username, so file ownership is consistent between host and container. You do not have root access.

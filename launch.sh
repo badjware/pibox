@@ -29,7 +29,7 @@ Options:
   -m, --mount MOUNT             add a mount (repeatable)
   -P, --extra-package PACKAGE   install an extra pacman or AUR package at startup (repeatable)
   -p, --port PORT               publish a container port (repeatable; Docker -p syntax)
-                                pi-web listens on 8504; default 127.0.0.1:8504:8504
+                                pi-web listens on 30141; default 127.0.0.1:30141:30141
       --unsafe-enable-docker    enable rootless Docker-in-Docker (privileged)
       --unsafe-enable-aws       mount ~/.aws into the container
       --unsafe-enable-kube      mount ~/.kube into the container
@@ -301,9 +301,9 @@ done
 if [[ "$harness" == "pi-web" ]]; then
     if [[ "$net_host" -eq 1 ]]; then
         # the host network namespace exposes 0.0.0.0 on every host interface
-        docker_extra_args+=("-e" "PI_WEB_HOST=127.0.0.1" "-e" "PI_WEB_PORT=${PIBOX_PI_WEB_PORT:-8504}")
+        docker_extra_args+=("-e" "PI_WEB_HOSTNAME=127.0.0.1" "-e" "PORT=${PIBOX_PI_WEB_PORT:-30141}")
     elif [[ "${#ports[@]}" -eq 0 ]]; then
-        docker_extra_args+=("-p" "127.0.0.1:${PIBOX_PI_WEB_PORT:-8504}:8504")
+        docker_extra_args+=("-p" "127.0.0.1:${PIBOX_PI_WEB_PORT:-30141}:30141")
     fi
 fi
 
@@ -377,11 +377,6 @@ if [[ "$harness" == "claude" ]]; then
     touch "$HOME/.claude.json"
     _vol_register "$HOME/.claude:/home/$HOST_USER/.claude:rw"
     _vol_register "$HOME/.claude.json:/home/$HOST_USER/.claude.json:rw" # claude really hates to have its config file read-only
-fi
-if [[ "$harness" == "pi-web" ]]; then
-    mkdir -p "$HOME/.pi-web" "$HOME/.config/pi-web"
-    _vol_register "$HOME/.pi-web:/home/$HOST_USER/.pi-web:rw"
-    _vol_register "$HOME/.config/pi-web:/home/$HOST_USER/.config/pi-web:rw"
 fi
 _vol_register "$HOME/.gitconfig:/home/$HOST_USER/.gitconfig:ro"
 _vol_register "pibox-cache:/home/$HOST_USER/.cache:rw"

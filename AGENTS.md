@@ -82,7 +82,7 @@ Build order when using `--build`: `Dockerfile.base` → `Dockerfile.<harness>`. 
 
 ### pi-web
 
-`pi-web` runs [PI WEB](https://pi-web.dev/) (`@jmfederico/pi-web`). The container has no user service manager, so `common/entrypoint.sh` starts `pi-web-sessiond` in the background and execs `pi-web-server` on `0.0.0.0:8504`. `launch.sh` publishes `127.0.0.1:${PIBOX_PI_WEB_PORT:-8504}:8504` unless any `--port` is given, in which case only the user's ports are published. With `--unsafe-host-net`, it sets `PI_WEB_HOST=127.0.0.1` and `PI_WEB_PORT=${PIBOX_PI_WEB_PORT:-8504}` instead, since there is no port mapping. `~/.pi-web` and `~/.config/pi-web` are bind-mounted only for this harness.
+`pi-web` runs [Pi Web](https://github.com/agegr/pi-web) (`@agegr/pi-web`). `common/entrypoint.sh` execs `pi-web` on `0.0.0.0:30141` (set through `PI_WEB_HOSTNAME` and `PORT`). `launch.sh` publishes `127.0.0.1:${PIBOX_PI_WEB_PORT:-30141}:30141` unless any `--port` is given, in which case only the user's ports are published. With `--unsafe-host-net`, it sets `PI_WEB_HOSTNAME=127.0.0.1` and `PORT=${PIBOX_PI_WEB_PORT:-30141}` instead, since there is no port mapping. Pi Web keeps its state in `~/.pi/agent`, so it needs no extra mounts. `Dockerfile.pi-web` sets `PI_WEB_NO_OPEN=1`.
 
 ## common/image_AGENTS.md
 
