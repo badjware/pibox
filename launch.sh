@@ -376,6 +376,7 @@ if [[ "$harness" == "claude" ]]; then
     mkdir -p "$HOME/.claude/project"
     touch "$HOME/.claude.json"
     _vol_register "$HOME/.claude:/home/$HOST_USER/.claude:rw"
+    _vol_register "$HOME/.claude.json:/home/$HOST_USER/.claude.json:rw" # claude really hates to have its config file read-only
 fi
 if [[ "$harness" == "pi-web" ]]; then
     mkdir -p "$HOME/.pi-web" "$HOME/.config/pi-web"

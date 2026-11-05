@@ -1,8 +1,8 @@
 ARG BASE_IMAGE=pibox:base
 FROM ${BASE_IMAGE}
 
-ARG CLAUDE_CODE_VERSION=2.1.209
+ARG CLAUDE_CODE_VERSION=2.1.318
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
-    npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+    npm install -g --allow-scripts=@anthropic-ai/claude-code @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 
 COPY common/image_AGENTS.md /CLAUDE.md

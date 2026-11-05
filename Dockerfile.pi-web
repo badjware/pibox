@@ -1,7 +1,8 @@
 ARG BASE_IMAGE=pibox:pi
 FROM ${BASE_IMAGE}
 
-ARG PI_WEB_VERSION=1.202610.9
+ARG PI_WEB_VERSION=1.202611.0
+PORT 8504
 
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     npm install -g --allow-scripts=node-pty \
