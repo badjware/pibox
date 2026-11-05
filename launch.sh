@@ -21,12 +21,13 @@ Options:
                                 agent to run (default: pi)
       --build                   build images locally instead of pulling
       --pull                    pull latest image before launch
-  -e, --ephemeral, --tmp        use a temp workdir
+      --ephemeral, --tmp        use a temp workdir
   -w, --workdir DIR             use DIR as the workdir instead of the current directory
   -r, --read-only, --ro         mount all volumes read-only
   -v, --volume VOLUME           bind-mount an extra volume (repeatable)
                                 PATH or PATH:ro|rw mounts PATH at the same path
   -m, --mount MOUNT             add a mount (repeatable)
+  -e, --env VAR[=VALUE]         set an environment variable (repeatable; Docker -e syntax)
   -P, --extra-package PACKAGE   install an extra pacman or AUR package at startup (repeatable)
   -p, --port PORT               publish a container port (repeatable; Docker -p syntax)
                                 pi-web listens on 30141; default 127.0.0.1:30141:30141
@@ -64,7 +65,7 @@ cleanup() {
     [[ -n "$tmpworkdir" ]] && rm -rf "$tmpworkdir"
 }
 
-PARSED=$(getopt -o 'hp:erw:H:v:m:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-enable-gcx,unsafe-host-wayland,unsafe-host-tmux,unsafe-host-net,ephemeral,tmp,workdir:,read-only,ro,harness:,volume:,mount:,extra-package:,port:,sac-moe-patience' -n "$0" -- "$@") || exit 1
+PARSED=$(getopt -o 'hp:e:rw:H:v:m:P:' --long 'help,build,pull,unsafe-enable-docker,unsafe-enable-aws,unsafe-enable-kube,unsafe-enable-gcx,unsafe-host-wayland,unsafe-host-tmux,unsafe-host-net,ephemeral,tmp,workdir:,read-only,ro,harness:,volume:,mount:,env:,extra-package:,port:,sac-moe-patience' -n "$0" -- "$@") || exit 1
 eval set -- "$PARSED"
 
 build=0
@@ -126,7 +127,7 @@ while true; do
             net_host=1
             shift
             ;;
-        -e|--ephemeral|--tmp)
+        --ephemeral|--tmp)
             ephemeral=1
             shift
             ;;
@@ -155,6 +156,10 @@ while true; do
             ;;
         -m|--mount)
             docker_extra_args+=("--mount" "$2")
+            shift 2
+            ;;
+        -e|--env)
+            docker_extra_args+=("-e" "$2")
             shift 2
             ;;
         -P|--extra-package)

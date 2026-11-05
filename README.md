@@ -68,10 +68,11 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 | `--unsafe-host-wayland`                 |       | Mount the Wayland socket into the container and forward Wayland environment variables.                                        |
 | `--unsafe-host-tmux`                    |       | Mount the tmux socket into the container and forward the tmux environment variable.                                           |
 | `--unsafe-host-net`                     |       | Share the host network namespace.                                                                                             |
-| `--ephemeral`, `--tmp`                  | `-e`  | Start in a temporary working directory instead of the current one.                                                            |
+| `--ephemeral`, `--tmp`                  |       | Start in a temporary working directory instead of the current one.                                                            |
 | `--workdir <dir>`                       | `-w`  | Use `<dir>` as the working directory instead of the current one. Incompatible with `--ephemeral`.                             |
 | `--read-only`, `--ro`                   | `-r`  | Mount all volumes as read-only inside the container.                                                                          |
 | `--volume <spec>`                       | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                                                      |
+| `--env <var>[=<value>]`                 | `-e`  | Set an environment variable in the container (repeatable, same syntax as `docker run -e`).                                    |
 | `--extra-package <name>`                | `-P`  | Install an extra pacman or AUR package at container startup. Repeatable and non-persistent.                                   |
 | `--port <spec>`                         | `-p`  | Publish a container port. Repeatable, using Docker `-p` syntax such as `9119:9119`. Replaces the default pi-web port mapping. |
 
