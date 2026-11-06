@@ -94,3 +94,5 @@ When editing agent-facing instructions that need to persist from one container r
 ## pi extensions
 
 The host's `~/.pi/agent/extensions` directory is bind-mounted into the container, so any pi extensions installed on the host (including `pi-claude-interop`, which lives in its own repo) are available inside pibox automatically. pibox itself no longer ships any bundled extensions.
+
+`common/entrypoint.sh` exports `BILI_CONFIG_FILE`, `BILI_SESSIONS_DIR`, and `ACP_LOG_FILE` so the `billion-context` pi package (installed under `~/.pi/agent/npm` and available through the `~/.pi` mount) keeps its state under `~/.pi/agent/billion-context/` instead of the unpersisted XDG directories. `--env` overrides them.

@@ -26,6 +26,12 @@ for stub in "$USER_HOME/.local" "$USER_HOME/.local/share" "$USER_HOME/.cache" "$
     fi
 done
 
+# billion-context (pi package) defaults to XDG paths, which are not persisted.
+# Keep its config, sessions, and log under ~/.pi, which is bind-mounted.
+export BILI_CONFIG_FILE="${BILI_CONFIG_FILE:-$USER_HOME/.pi/agent/billion-context/billion-context.json}"
+export BILI_SESSIONS_DIR="${BILI_SESSIONS_DIR:-$USER_HOME/.pi/agent/billion-context/sessions}"
+export ACP_LOG_FILE="${ACP_LOG_FILE:-$USER_HOME/.pi/agent/billion-context/bili.log}"
+
 # ---------------------------------------------------------------------------
 # Optional: rootless Docker-in-Docker
 #
