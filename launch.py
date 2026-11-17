@@ -40,6 +40,10 @@ HARNESS_COMMANDS = {
     "pi-web": ["pi-web"],
 }
 PI_WEB_PORT = "30141"
+# Socket directory of the --unsafe-enable-docker sidecar, at the same path in
+# the sidecar and the sandbox. It must be outside /run, which rootlesskit
+# copies up into its own mount namespace.
+DOCKER_RUN_DIR = "/pibox-docker"
 
 
 def parse_args(argv):
@@ -82,7 +86,8 @@ def parse_args(argv):
                         f"pi-web listens on {PI_WEB_PORT} unless PIBOX_PI_WEB_PORT is set")
     p.add_argument("--policy", action="append", default=[],
                    help="merge an OpenShell policy file into the default policy (repeatable)")
-    p.add_argument("--unsafe-enable-docker", action="store_true", help="enable rootless Docker-in-Docker (privileged)")
+    p.add_argument("--unsafe-enable-docker", action="store_true",
+                   help="start a rootless Docker daemon in a privileged sidecar container")
     p.add_argument("--unsafe-enable-aws", action="store_true", help="mount ~/.aws into the sandbox")
     p.add_argument("--unsafe-enable-kube", action="store_true", help="mount ~/.kube into the sandbox")
     p.add_argument("--unsafe-enable-gcx", action="store_true", help="mount ~/.config/gcx into the sandbox")
@@ -351,6 +356,41 @@ def remove_volume(name):
     print(f"pibox: warning: could not remove volume {name}", file=sys.stderr)
 
 
+def start_docker_sidecar(name, image, workdir, run_dir):
+    """Start a rootless dockerd in a privileged container next to the sandbox.
+
+    OpenShell sandboxes cannot run a Docker daemon, so the agent reaches this
+    one through its socket. The workdir is mounted at the same path so that
+    bind mounts from the agent resolve to the same files.
+
+    Args:
+        name: container name.
+        image: per-user image, so dockerd runs as the host user.
+        workdir: workdir path.
+        run_dir: host directory that receives the socket.
+    """
+    run([
+        "docker", "run", "-d", "--rm", "--privileged", "--name", name,
+        "-v", f"{workdir}:{workdir}:rslave",
+        "-v", f"{run_dir}:{DOCKER_RUN_DIR}",
+        "-e", f"HOME={HOME}",
+        "-e", f"XDG_RUNTIME_DIR={DOCKER_RUN_DIR}",
+        "-e", f"XDG_DATA_HOME={HOME}/.local/share",
+        "--entrypoint", "dockerd-rootless.sh",
+        image,
+        f"--host=unix://{DOCKER_RUN_DIR}/docker.sock", "--storage-driver=fuse-overlayfs",
+    ], stdout=subprocess.DEVNULL)
+    host_socket = f"unix://{run_dir}/docker.sock"
+    for _ in range(60):
+        if subprocess.run(["docker", "-H", host_socket, "version"], capture_output=True).returncode == 0:
+            return
+        if subprocess.run(["docker", "container", "inspect", name], capture_output=True).returncode != 0:
+            break
+        time.sleep(0.5)
+    subprocess.run(["docker", "logs", "--tail", "50", name])
+    die("the rootless Docker daemon did not start", 1)
+
+
 def keep_forwards(sandbox_name, ports, stop):
     """Keep openshell port forwards running until stop is set.
 
@@ -379,15 +419,6 @@ def main():
     """Entry point. Returns the exit status of the agent."""
     opts, agent_args = parse_args(sys.argv[1:])
 
-    # TODO(openshell): port the remaining options, then remove this check.
-    unported = [flag for flag, used in [
-        ("--unsafe-enable-docker", opts.unsafe_enable_docker), ("--unsafe-enable-aws", opts.unsafe_enable_aws),
-        ("--unsafe-enable-kube", opts.unsafe_enable_kube), ("--unsafe-enable-gcx", opts.unsafe_enable_gcx),
-        ("--unsafe-host-wayland", opts.unsafe_host_wayland),
-    ] if used]
-    if unported:
-        die(f"not yet supported with OpenShell: {' '.join(unported)}")
-
     # parse everything before prompting or starting anything
     user_mounts = [parse_volume(v) for v in opts.volume] + [parse_mount(m) for m in opts.mount]
     user_env = dict(parse_env(e) for e in opts.env)
@@ -398,7 +429,8 @@ def main():
     if os.getuid() == 0:
         confirm("running as root", skip)
     if opts.unsafe_enable_docker:
-        confirm("--unsafe-enable-docker enables privileged mode", skip)
+        confirm("--unsafe-enable-docker starts a privileged container, "
+                "and the network policy does not apply to the containers it runs", skip)
     if opts.unsafe_enable_aws:
         confirm("--unsafe-enable-aws mounts ~/.aws into the sandbox", skip)
     if opts.unsafe_enable_kube:
@@ -407,6 +439,12 @@ def main():
         confirm("--unsafe-enable-gcx mounts ~/.config/gcx into the sandbox", skip)
     if opts.unsafe_host_wayland:
         confirm("--unsafe-host-wayland mounts the Wayland socket into the sandbox", skip)
+        runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+        wayland_socket = Path(runtime_dir) / os.environ.get("WAYLAND_DISPLAY", "")
+        if not os.environ.get("WAYLAND_DISPLAY"):
+            die("--unsafe-host-wayland requires WAYLAND_DISPLAY to be set")
+        if not wayland_socket.is_socket():
+            die(f"Wayland socket not found: {wayland_socket}")
     for port in ports:
         confirm(f"--port publishes {port} on the host", skip)
 
@@ -424,9 +462,15 @@ def main():
     if opts.harness == "claude":
         (HOME / ".claude").mkdir(exist_ok=True)
         (HOME / ".claude.json").touch()
+    unsafe_dirs = [(opts.unsafe_enable_aws, HOME / ".aws"), (opts.unsafe_enable_kube, HOME / ".kube"),
+                   (opts.unsafe_enable_gcx, HOME / ".config" / "gcx")]
+    for enabled, path in unsafe_dirs:
+        if enabled:
+            path.mkdir(parents=True, exist_ok=True)
 
     sandbox_name = f"pibox-{os.getpid()}"  # openshell limits names to 19 characters
     rslave_volumes = []
+    docker_sidecar = None
     stop_forwards = threading.Event()
     tmp = tempfile.TemporaryDirectory(dir=STATE_DIR, prefix="tmp.")
     try:
@@ -459,6 +503,15 @@ def main():
         for path in map(Path, ["/etc/fonts", "/usr/share/fonts", "/var/cache/fontconfig"]):
             if path.is_dir():
                 mounts[path] = mount("bind", path, read_only=True)
+        for enabled, path in unsafe_dirs:
+            if enabled:
+                mounts[path] = mount("bind", path, read_only=True)
+        if opts.unsafe_host_wayland:
+            mounts[wayland_socket] = mount("bind", wayland_socket)
+        if opts.unsafe_enable_docker:
+            docker_run_dir = Path(tmp.name) / "docker"
+            docker_run_dir.mkdir()
+            mounts[Path(DOCKER_RUN_DIR)] = mount("bind", docker_run_dir)
         for target, entry in user_mounts:
             mounts[Path(target)] = entry
         # When launched from $HOME, the workdir is read-only to avoid exposing
@@ -515,6 +568,12 @@ def main():
         if opts.harness == "claude":
             # no auto-updater or telemetry; the network policy blocks them anyway
             env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
+        if opts.unsafe_host_wayland:
+            env["XDG_RUNTIME_DIR"] = runtime_dir
+            env["WAYLAND_DISPLAY"] = os.environ["WAYLAND_DISPLAY"]
+            env["XDG_SESSION_TYPE"] = "wayland"
+        if opts.unsafe_enable_docker:
+            env["DOCKER_HOST"] = f"unix://{DOCKER_RUN_DIR}/docker.sock"
         if opts.harness == "pi-web":
             # openshell forwards to the same port number, so listen on the host port
             env["PI_WEB_HOSTNAME"] = "127.0.0.1"
@@ -540,6 +599,9 @@ def main():
             *[arg for key, value in env.items() if value is not None for arg in ("--env", f"{key}={value}")],
             "--", "bash", "-c", script, "pibox", str(workdir), *HARNESS_COMMANDS[opts.harness], *agent_args,
         ]
+        if opts.unsafe_enable_docker:
+            docker_sidecar = f"{sandbox_name}-docker"
+            start_docker_sidecar(docker_sidecar, user_image, workdir, docker_run_dir)
         if ports:
             # --forward cannot be combined with --no-keep
             threading.Thread(target=keep_forwards, args=(sandbox_name, ports, stop_forwards), daemon=True).start()
@@ -552,6 +614,8 @@ def main():
                            capture_output=True)
         # --no-keep cannot clean up when the openshell CLI itself is killed
         subprocess.run(["openshell", "sandbox", "delete", sandbox_name], capture_output=True)
+        if docker_sidecar:
+            subprocess.run(["docker", "rm", "-f", docker_sidecar], capture_output=True)
         for name in rslave_volumes:
             remove_volume(name)
         tmp.cleanup()

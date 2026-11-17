@@ -16,6 +16,13 @@ RUN (getent group "$HOST_GID" >/dev/null || groupadd -g "$HOST_GID" "$HOST_USER"
     && install -d -o "$HOST_UID" -g "$HOST_GID" \
         "$HOST_HOME" "$HOST_HOME/.cache" "$HOST_HOME/.config" "$HOST_HOME/.local" "$HOST_HOME/.local/share"
 
+# Rootless dockerd for --unsafe-enable-docker: subordinate IDs for newuidmap /
+# newgidmap, and their file capabilities, which can be lost in image export.
+RUN echo "$HOST_USER:100000:65536" >> /etc/subuid \
+    && echo "$HOST_USER:100000:65536" >> /etc/subgid \
+    && setcap cap_setuid+ep /usr/bin/newuidmap \
+    && setcap cap_setgid+ep /usr/bin/newgidmap
+
 COPY install-extra-packages.sh /usr/local/lib/pibox/install-extra-packages.sh
 RUN if [ -n "$EXTRA_PACKAGES" ]; then \
         /usr/local/lib/pibox/install-extra-packages.sh "$HOST_USER" $EXTRA_PACKAGES; \
