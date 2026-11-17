@@ -1,4 +1,4 @@
-#compdef pibox claudebox nanobox launch.sh
+#compdef pibox claudebox nanobox launch.py
 
 _pibox() {
     _arguments -S \
@@ -8,19 +8,15 @@ _pibox() {
         '--harness[agent to run]:harness:(pi claude pi-web)' \
         '--ephemeral[use a temp workdir]' \
         '--workdir[use a directory as the workdir instead of the current one]:directory:_files -/' \
-        '--read-only[mount all volumes read-only]' \
-        '*--volume[bind-mount an extra volume]:volume:_files' \
+        '--read-only[mount the workdir read-only]' \
+        '*--volume[mount a volume (Docker -v syntax)]:volume:_files' \
         '*--mount[add a mount (Docker --mount syntax)]:mount:' \
-        '*--env[set an environment variable in the container]:variable:_parameters -g "*export*"' \
-        '*--extra-package[install an extra pacman or AUR package at startup]:package:' \
-        '*--port[publish a container port (Docker -p syntax)]:port:' \
-        '--unsafe-enable-docker[enable rootless Docker-in-Docker (privileged)]' \
-        '--unsafe-enable-aws[mount ~/.aws into the container]' \
-        '--unsafe-enable-kube[mount ~/.kube into the container]' \
-        '--unsafe-enable-gcx[mount ~/.config/gcx into the container]' \
-        '--unsafe-host-wayland[mount the Wayland socket into the container]' \
-        '--unsafe-host-tmux[mount the tmux socket into the container]' \
-        '--unsafe-host-net[share the host network namespace]' \
+        '*--env[set an environment variable in the sandbox]:variable:_parameters -g "*export*"' \
+        '*--extra-package[install an extra pacman or AUR package in the image]:package:' \
+        '*--port[forward a sandbox port to the same host port]:port:' \
+        '*--policy[merge an OpenShell policy file into the default policy]:policy file:_files -g "*.(yaml|yml)"' \
+        '--unsafe-enable-docker[start a rootless Docker daemon in a privileged sidecar container]' \
+        '--unsafe-host-wayland[mount the Wayland socket into the sandbox]' \
         '(-)--[forward remaining args to the agent]:: :_default'
 }
 

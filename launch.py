@@ -49,6 +49,8 @@ PI_WEB_PORT = "30141"
 DOCKER_RUN_DIR = "/pibox-docker"
 # Read-only template of the gcx configuration, filled in at sandbox start.
 GCX_TEMPLATE = "/etc/pibox/gcx-config.yaml"
+# Filled-in gcx configuration. Not under $HOME, which is read-only when it is the workdir.
+GCX_CONFIG = "/tmp/pibox-gcx-config.yaml"
 # Generated kubeconfig that points at the host kubectl proxies.
 KUBECONFIG_PATH = "/etc/pibox/kubeconfig"
 
@@ -339,15 +341,15 @@ def build_user_image(harness, image, extra_packages):
     tag = f"pibox-user:{harness}"
     print(f"pibox: building {tag}", file=sys.stderr)
     run([
-        "docker", "build", "-q", "-t", tag, "-f", str(SCRIPT_DIR / "Dockerfile.user"),
+        "docker", "build", "-q", "-t", tag,
         "--build-arg", f"BASE_IMAGE={image}",
         "--build-arg", f"HOST_UID={os.getuid()}",
         "--build-arg", f"HOST_GID={os.getgid()}",
         "--build-arg", f"HOST_USER={HOST_USER}",
         "--build-arg", f"HOST_HOME={HOME}",
         "--build-arg", f"EXTRA_PACKAGES={' '.join(extra_packages)}",
-        str(SCRIPT_DIR / "common"),
-    ], stdout=subprocess.DEVNULL)
+        "-",
+    ], input=USER_DOCKERFILE, text=True, stdout=subprocess.DEVNULL)
     return tag
 
 
@@ -474,7 +476,7 @@ def setup_aws(image):
     upsert_provider(name, "pibox-aws", credentials)
 
     out = run(["docker", "run", "--rm", "-i", "--entrypoint", "python3", image, "-"],
-              input=(SCRIPT_DIR / "scripts" / "aws-endpoints.py").read_text(), capture_output=True, text=True)
+              input=AWS_ENDPOINTS_SCRIPT, capture_output=True, text=True)
     generated = json.loads(out.stdout)
     rule = {
         "endpoints": [{"host": e["host"], "port": 443, "protocol": "rest", "access": "full",
@@ -751,7 +753,7 @@ def main():
             fs_policy["read_only" if entry["read_only"] else "read_write"].append(str(target))
 
         policy = merge_policies([
-            yaml.safe_load((SCRIPT_DIR / "scripts" / "policy.yaml").read_text()),
+            yaml.safe_load(DEFAULT_POLICY),
             {"network_policies": {"pibox-aws": aws[1]}} if aws else {},
             {"network_policies": {"pibox-kube": kube[1]}} if kube else {},
             *user_policies,
@@ -779,6 +781,8 @@ def main():
             env["DOCKER_HOST"] = f"unix://{DOCKER_RUN_DIR}/docker.sock"
         if kube:
             env["KUBECONFIG"] = KUBECONFIG_PATH
+        if gcx:
+            env["GCX_CONFIG"] = GCX_CONFIG
         if aws:
             env["AWS_DEFAULT_REGION"] = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or aws[2]
         if opts.harness == "pi-web":
@@ -796,9 +800,9 @@ def main():
         script = 'cd -- "$1" && shift && exec "$@"' + ("" if tty else " </dev/null")
         if gcx:
             # the provider placeholders only exist in the sandbox environment
-            script = ('mkdir -p "$HOME/.config/gcx" && python3 -c "import os, sys; '
+            script = ('python3 -c "import os, sys; '
                       'sys.stdout.write(os.path.expandvars(open(sys.argv[1]).read()))" '
-                      f'{GCX_TEMPLATE} > "$HOME/.config/gcx/config.yaml" && ' + script)
+                      f'{GCX_TEMPLATE} > {GCX_CONFIG} && ' + script)
         cmd = [
             "openshell", "sandbox", "create",
             "--name", sandbox_name,
@@ -835,6 +839,215 @@ def main():
         for name in rslave_volumes:
             remove_volume(name)
         tmp.cleanup()
+
+
+# ---------------------------------------------------------------------------
+# Embedded files. They live here so that a copy of launch.py works on its own.
+# ---------------------------------------------------------------------------
+
+# Per-user image, built by build_user_image() with this text on stdin.
+USER_DOCKERFILE = r'''# Per-user layer built by launch.py on top of a harness image.
+# Mirrors the host user so bind-mounted files keep their ownership, and
+# installs --extra-package requests. Built without a context.
+ARG BASE_IMAGE=ghcr.io/badjware/pibox:pi
+FROM ${BASE_IMAGE}
+
+ARG HOST_UID
+ARG HOST_GID
+ARG HOST_USER
+ARG HOST_HOME
+ARG EXTRA_PACKAGES=""
+
+# Pre-create the parents of bind-mount targets so Docker does not create them as root.
+RUN (getent group "$HOST_GID" >/dev/null || groupadd -g "$HOST_GID" "$HOST_USER") \
+    && (getent passwd "$HOST_UID" >/dev/null || useradd -u "$HOST_UID" -g "$HOST_GID" -d "$HOST_HOME" -s /bin/bash "$HOST_USER") \
+    && install -d -o "$HOST_UID" -g "$HOST_GID" \
+        "$HOST_HOME" "$HOST_HOME/.cache" "$HOST_HOME/.config" "$HOST_HOME/.local" "$HOST_HOME/.local/share"
+
+# Rootless dockerd for --unsafe-enable-docker: subordinate IDs for newuidmap /
+# newgidmap, and their file capabilities, which can be lost in image export.
+RUN echo "$HOST_USER:100000:65536" >> /etc/subuid \
+    && echo "$HOST_USER:100000:65536" >> /etc/subgid \
+    && setcap cap_setuid+ep /usr/bin/newuidmap \
+    && setcap cap_setgid+ep /usr/bin/newgidmap
+
+COPY --chmod=755 <<'EOF' /usr/local/lib/pibox/install-extra-packages.sh
+#!/bin/bash
+# Install --extra-package requests while building the per-user image.
+#
+# Usage: install-extra-packages.sh BUILD_USER PACKAGE...
+#
+# Runs as root. Official-repo packages are installed directly with pacman.
+# Anything pacman does not know about is treated as an AUR package: we clone
+# it, install its repo dependencies, build it as BUILD_USER (makepkg refuses
+# to run as root), then install the built package with pacman -U.
+#
+# AUR builds are not recursive: only official-repo dependencies are resolved,
+# so an AUR package with AUR-only dependencies will fail to build.
+set -e
+
+build_user="$1"
+shift
+
+build_aur_package() {
+    # Build a single AUR package as build_user and install it as root.
+    local pkg="$1"
+    local build_dir
+    build_dir=$(mktemp -d)
+    chown "$build_user:" "$build_dir"
+
+    runuser -u "$build_user" -- git clone --depth=1 "https://aur.archlinux.org/$pkg.git" "$build_dir/$pkg"
+
+    # Install repo dependencies as root so makepkg can run without sudo.
+    local deps
+    deps=$(runuser -u "$build_user" -- makepkg --printsrcinfo -D "$build_dir/$pkg" \
+        | sed -n 's/^[[:space:]]*\(make\)\?depends = //p' | sed 's/[<>=].*//')
+    if [[ -n "$deps" ]]; then
+        pacman -S --noconfirm --needed --asdeps $deps
+    fi
+
+    runuser -u "$build_user" -- bash -c "cd '$build_dir/$pkg' && makepkg --noconfirm"
+
+    local built
+    built=$(find "$build_dir/$pkg" -name '*.pkg.tar.zst' | grep -v -- '-debug')
+    pacman -U --noconfirm $built
+    rm -rf "$build_dir"
+}
+
+# Arch does not support partial upgrades: packages from a fresh sync may need
+# newer libraries than the image has.
+pacman -Syu --noconfirm >/dev/null
+
+repo_packages=()
+aur_packages=()
+for pkg in "$@"; do
+    if pacman -Si "$pkg" >/dev/null 2>&1; then
+        repo_packages+=("$pkg")
+    else
+        aur_packages+=("$pkg")
+    fi
+done
+
+[[ ${#repo_packages[@]} -gt 0 ]] && pacman -S --noconfirm --needed "${repo_packages[@]}"
+
+if [[ ${#aur_packages[@]} -gt 0 ]]; then
+    pacman -S --noconfirm --needed base-devel git
+    for pkg in "${aur_packages[@]}"; do
+        build_aur_package "$pkg"
+    done
+fi
+
+pacman -Scc --noconfirm
+EOF
+RUN if [ -n "$EXTRA_PACKAGES" ]; then \
+        /usr/local/lib/pibox/install-extra-packages.sh "$HOST_USER" $EXTRA_PACKAGES; \
+    fi
+
+ENV PATH=${HOST_HOME}/go/bin:${PATH}
+# billion-context (pi package) defaults to XDG paths, which are not persisted.
+# Keep its config, sessions, and log under ~/.pi, which is bind-mounted.
+ENV BILI_CONFIG_FILE=${HOST_HOME}/.pi/agent/billion-context/billion-context.json \
+    BILI_SESSIONS_DIR=${HOST_HOME}/.pi/agent/billion-context/sessions \
+    ACP_LOG_FILE=${HOST_HOME}/.pi/agent/billion-context/bili.log
+
+USER ${HOST_UID}:${HOST_GID}
+'''
+
+# Default sandbox policy, merged by main() with the generated parts and the --policy files.
+DEFAULT_POLICY = r'''# Default OpenShell sandbox policy for pibox.
+#
+# launch.py merges this policy with the generated mount paths and process
+# identity, then with each --policy file. Network access is limited to the
+# model providers; add other hosts with --policy.
+#
+# A rule also applies to the processes that a listed binary starts, so listing
+# the harness binaries (node for pi, the native claude binary) covers the tools
+# the agent runs.
+version: 1
+
+landlock:
+  compatibility: hard_requirement
+
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /usr
+    - /lib
+    - /etc
+    - /opt
+    - /proc
+    - /dev/urandom
+    - /var/log
+    - /AGENTS.md
+    - /CLAUDE.md
+  read_write:
+    - /tmp
+    - /dev/null
+
+network_policies:
+  databricks:
+    endpoints:
+      - host: "**.azuredatabricks.net"
+        port: 443
+        allowed_ips: [10.0.0.0/8]
+    binaries:
+      - { path: /usr/bin/node }
+      - { path: /usr/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe }
+  badjware:
+    endpoints:
+      - host: "*.badjware.dev"
+        port: 443
+        allowed_ips: [192.168.0.0/16]
+    binaries:
+      - { path: /usr/bin/node }
+      - { path: /usr/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe }
+'''
+
+# Piped to python3 in the per-user image by setup_aws().
+AWS_ENDPOINTS_SCRIPT = r'''"""Print the AWS endpoints that need SigV4 signing, as JSON.
+
+Run by launch.py with the Python interpreter of the pibox image, which has the
+AWS CLI and its botocore service models. Prints an object with:
+
+    interpreter: real path of this interpreter, which runs aws and boto3
+    endpoints:   list of {host, signing_service[, signing_region]}
+"""
+
+import glob
+import gzip
+import json
+import os
+import sys
+
+import awscli  # noqa: F401  AWS CLI v2 bundles botocore and makes it importable
+import botocore
+
+endpoints = {}
+for path in glob.glob(os.path.join(os.path.dirname(botocore.__file__), "data", "*", "*", "service-2.json*")):
+    opener = gzip.open if path.endswith(".gz") else open
+    with opener(path, "rt") as f:
+        meta = json.load(f)["metadata"]
+    auth = meta.get("auth", [])
+    if meta.get("signatureVersion") not in ("v4", "s3v4") and not any(a.endswith("#sigv4") for a in auth):
+        continue
+    prefix = meta["endpointPrefix"]
+    name = meta.get("signingName") or prefix
+    # the proxy reads the region from regional host names
+    endpoints[f"{prefix}.*.amazonaws.com"] = (name, None)
+    if meta.get("globalEndpoint"):
+        endpoints[meta["globalEndpoint"]] = (name, "us-east-1")
+
+# Virtual-hosted S3 buckets. The legacy global form (**.s3.amazonaws.com) is
+# left out: OpenShell rejects it next to this one because their signing
+# regions differ and the wildcards may overlap.
+endpoints["**.s3.*.amazonaws.com"] = ("s3", None)
+
+print(json.dumps({
+    "interpreter": os.path.realpath(sys.executable),
+    "endpoints": [{"host": host, "signing_service": name, **({"signing_region": region} if region else {})}
+                  for host, (name, region) in sorted(endpoints.items())],
+}))
+'''
 
 
 def exit_on_signal(signum, _frame):
