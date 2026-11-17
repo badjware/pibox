@@ -6,11 +6,13 @@ agent runs as the host user so files keep their ownership.
 """
 
 import argparse
+import configparser
 import json
 import os
 import pwd
 import re
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -18,6 +20,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -44,6 +47,10 @@ PI_WEB_PORT = "30141"
 # the sidecar and the sandbox. It must be outside /run, which rootlesskit
 # copies up into its own mount namespace.
 DOCKER_RUN_DIR = "/pibox-docker"
+# Read-only template of the gcx configuration, filled in at sandbox start.
+GCX_TEMPLATE = "/etc/pibox/gcx-config.yaml"
+# Generated kubeconfig that points at the host kubectl proxies.
+KUBECONFIG_PATH = "/etc/pibox/kubeconfig"
 
 
 def parse_args(argv):
@@ -88,9 +95,6 @@ def parse_args(argv):
                    help="merge an OpenShell policy file into the default policy (repeatable)")
     p.add_argument("--unsafe-enable-docker", action="store_true",
                    help="start a rootless Docker daemon in a privileged sidecar container")
-    p.add_argument("--unsafe-enable-aws", action="store_true", help="mount ~/.aws into the sandbox")
-    p.add_argument("--unsafe-enable-kube", action="store_true", help="mount ~/.kube into the sandbox")
-    p.add_argument("--unsafe-enable-gcx", action="store_true", help="mount ~/.config/gcx into the sandbox")
     p.add_argument("--unsafe-host-wayland", action="store_true", help="mount the Wayland socket into the sandbox")
     p.add_argument("--sac-moe-patience", action="store_true", help=argparse.SUPPRESS)
     return p.parse_args(argv), agent_args
@@ -391,6 +395,203 @@ def start_docker_sidecar(name, image, workdir, run_dir):
     die("the rootless Docker daemon did not start", 1)
 
 
+def upsert_profile(profile):
+    """Import an OpenShell provider profile, or update it if it already exists.
+
+    Args:
+        profile: profile dict, without resource_version.
+    """
+    current = subprocess.run(["openshell", "profile", "export", profile["id"], "-o", "json"],
+                             capture_output=True, text=True)
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml") as f:
+        if current.returncode == 0:
+            profile = {**profile, "resource_version": json.loads(current.stdout)["resource_version"]}
+            cmd = ["openshell", "profile", "update", profile["id"], "-f", f.name]
+        else:
+            cmd = ["openshell", "profile", "import", "-f", f.name]
+        yaml.safe_dump(profile, f)
+        f.flush()
+        run(cmd, stdout=subprocess.DEVNULL)
+
+
+def upsert_provider(name, profile_id, credentials):
+    """Create an OpenShell provider, or replace its credentials if it exists.
+
+    The values go through the environment of the openshell CLI so that they
+    do not appear in its arguments.
+
+    Args:
+        name: provider name.
+        profile_id: provider profile (type) of the provider.
+        credentials: dict of credential environment key to value.
+    """
+    exists = subprocess.run(["openshell", "provider", "get", name], capture_output=True).returncode == 0
+    cmd = ["openshell", "provider", "update", name] if exists else \
+        ["openshell", "provider", "create", "--name", name, "--type", profile_id]
+    for key in credentials:
+        cmd += ["--credential", key]
+    run(cmd, env={**os.environ, **credentials}, stdout=subprocess.DEVNULL)
+
+
+def setup_aws(image):
+    """Expose the host AWS profile to the sandbox through SigV4 signing.
+
+    The profile named by the host AWS_PROFILE (default: "default") is read
+    from ~/.aws/credentials and stored in a provider. The sandbox only gets
+    placeholders; the OpenShell proxy re-signs every AWS request with the real
+    credentials, so the IAM policy of the profile controls access.
+
+    Args:
+        image: per-user image, whose AWS CLI lists the AWS services.
+
+    Returns:
+        A tuple (provider name, network policy rule, region), or None when
+        the profile is not found.
+    """
+    profile = os.environ.get("AWS_PROFILE") or "default"
+    config = configparser.RawConfigParser()
+    config.read(HOME / ".aws" / "credentials")
+    if not config.has_option(profile, "aws_access_key_id"):
+        return None
+    section = config[profile]
+    credentials = {"AWS_ACCESS_KEY_ID": section["aws_access_key_id"],
+                   "AWS_SECRET_ACCESS_KEY": section["aws_secret_access_key"]}
+    if section.get("aws_session_token"):
+        credentials["AWS_SESSION_TOKEN"] = section["aws_session_token"]
+
+    upsert_profile({
+        "id": "pibox-aws",
+        "display_name": "pibox AWS",
+        "description": "AWS credentials from the host ~/.aws/credentials, used for SigV4 signing",
+        "category": "other",
+        "credentials": [
+            {"name": "access_key_id", "env_vars": ["AWS_ACCESS_KEY_ID"], "required": True},
+            {"name": "secret_access_key", "env_vars": ["AWS_SECRET_ACCESS_KEY"], "required": True},
+            {"name": "session_token", "env_vars": ["AWS_SESSION_TOKEN"], "required": False},
+        ],
+    })
+    name = "pibox-aws-" + re.sub(r"[^a-z0-9-]", "-", profile.lower())
+    upsert_provider(name, "pibox-aws", credentials)
+
+    out = run(["docker", "run", "--rm", "-i", "--entrypoint", "python3", image, "-"],
+              input=(SCRIPT_DIR / "scripts" / "aws-endpoints.py").read_text(), capture_output=True, text=True)
+    generated = json.loads(out.stdout)
+    rule = {
+        "endpoints": [{"host": e["host"], "port": 443, "protocol": "rest", "access": "full",
+                       "credential_binding": {"provider": name}, "credential_signing": "sigv4",
+                       **{k: v for k, v in e.items() if k != "host"}} for e in generated["endpoints"]],
+        "binaries": [{"path": generated["interpreter"]}],
+    }
+    return name, rule, section.get("region")
+
+
+def setup_gcx(template_path):
+    """Expose the host gcx stacks to the sandbox through bearer token injection.
+
+    Each stack token from ~/.config/gcx/config.yaml is stored in a provider.
+    A copy of the configuration with ${GCX_TOKEN_<STACK>} in place of the
+    tokens is written to template_path; the sandbox fills it in with the
+    provider placeholders at start.
+
+    Returns:
+        The provider name, or None when there is no gcx configuration.
+    """
+    try:
+        config = yaml.safe_load((HOME / ".config" / "gcx" / "config.yaml").read_text())
+    except FileNotFoundError:
+        return None
+    credentials, hosts = {}, {}
+    for stack, entry in (config.get("stacks") or {}).items():
+        grafana = (entry or {}).get("grafana") or {}
+        if not grafana.get("token") or not grafana.get("server"):
+            continue
+        key = "GCX_TOKEN_" + re.sub(r"[^A-Z0-9]", "_", stack.upper())
+        credentials[key] = grafana["token"]
+        grafana["token"] = f"${{{key}}}"
+        url = urlsplit(grafana["server"])
+        hosts[url.hostname] = url.port or 443
+    if not credentials:
+        return None
+
+    upsert_profile({
+        "id": "pibox-gcx",
+        "display_name": "pibox gcx",
+        "description": "Grafana tokens from the host gcx configuration",
+        "category": "other",
+        "credentials": [{"name": key.lower(), "env_vars": [key], "required": True,
+                         "auth_style": "bearer", "header_name": "authorization"} for key in credentials],
+        "endpoints": [{"host": host, "port": port, "protocol": "rest", "access": "full"}
+                      for host, port in hosts.items()],
+        "binaries": ["/usr/local/bin/gcx"],
+    })
+    upsert_provider("pibox-gcx", "pibox-gcx", credentials)
+    Path(template_path).write_text(yaml.safe_dump(config, sort_keys=False))
+    return "pibox-gcx"
+
+
+def setup_kube(work_dir):
+    """Expose the host kubectl contexts to the sandbox through kubectl proxy.
+
+    One kubectl proxy per context runs on the host loopback, on a port picked
+    by the kernel, and authenticates with the host kubeconfig. The sandbox
+    gets a kubeconfig without credentials that points at the proxies through
+    host.openshell.internal.
+
+    Args:
+        work_dir: directory for the generated kubeconfig and the proxy logs.
+
+    Returns:
+        A tuple (kubeconfig path, network policy rule, proxy processes), or
+        None when there is no kubectl context on the host.
+    """
+    if not shutil.which("kubectl"):
+        return None
+    view = subprocess.run(["kubectl", "config", "view", "-o", "json"], capture_output=True, text=True)
+    config = json.loads(view.stdout or "{}") if view.returncode == 0 else {}
+    contexts = {c["name"]: c.get("context") or {} for c in config.get("contexts") or []}
+    if not contexts:
+        return None
+
+    procs, ports = [], {}
+    for name in contexts:
+        log = Path(work_dir) / f"kubectl-proxy-{len(procs)}.log"
+        with open(log, "w") as out:
+            # exec and attach are rejected by default
+            procs.append(subprocess.Popen(
+                ["kubectl", "proxy", "--context", name, "--address", "127.0.0.1", "--port", "0",
+                 "--accept-hosts", r"^host\.openshell\.internal$", "--reject-paths", "^$"],
+                stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT))
+        for _ in range(100):
+            m = re.search(r"Starting to serve on [^\s]*:(\d+)", log.read_text())
+            if m or procs[-1].poll() is not None:
+                break
+            time.sleep(0.1)
+        if m:
+            ports[name] = int(m[1])
+        else:
+            print(f"pibox: warning: kubectl proxy failed for context {name}: {log.read_text().strip()}",
+                  file=sys.stderr)
+
+    kubeconfig = {
+        "apiVersion": "v1",
+        "kind": "Config",
+        "clusters": [{"name": name, "cluster": {"server": f"http://host.openshell.internal:{port}"}}
+                     for name, port in ports.items()],
+        "users": [{"name": "kubectl-proxy", "user": {}}],
+        "contexts": [{"name": name, "context": {"cluster": name, "user": "kubectl-proxy",
+                                               **({"namespace": contexts[name]["namespace"]}
+                                                  if contexts[name].get("namespace") else {})}}
+                     for name in ports],
+    }
+    if config.get("current-context") in ports:
+        kubeconfig["current-context"] = config["current-context"]
+    path = Path(work_dir) / "kubeconfig"
+    path.write_text(yaml.safe_dump(kubeconfig, sort_keys=False))
+    rule = {"endpoints": [{"host": "host.openshell.internal", "ports": sorted(ports.values())}],
+            "binaries": [{"path": "/usr/bin/kubectl"}]}
+    return path, rule, procs
+
+
 def keep_forwards(sandbox_name, ports, stop):
     """Keep openshell port forwards running until stop is set.
 
@@ -431,12 +632,6 @@ def main():
     if opts.unsafe_enable_docker:
         confirm("--unsafe-enable-docker starts a privileged container, "
                 "and the network policy does not apply to the containers it runs", skip)
-    if opts.unsafe_enable_aws:
-        confirm("--unsafe-enable-aws mounts ~/.aws into the sandbox", skip)
-    if opts.unsafe_enable_kube:
-        confirm("--unsafe-enable-kube mounts ~/.kube into the sandbox", skip)
-    if opts.unsafe_enable_gcx:
-        confirm("--unsafe-enable-gcx mounts ~/.config/gcx into the sandbox", skip)
     if opts.unsafe_host_wayland:
         confirm("--unsafe-host-wayland mounts the Wayland socket into the sandbox", skip)
         runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
@@ -462,15 +657,10 @@ def main():
     if opts.harness == "claude":
         (HOME / ".claude").mkdir(exist_ok=True)
         (HOME / ".claude.json").touch()
-    unsafe_dirs = [(opts.unsafe_enable_aws, HOME / ".aws"), (opts.unsafe_enable_kube, HOME / ".kube"),
-                   (opts.unsafe_enable_gcx, HOME / ".config" / "gcx")]
-    for enabled, path in unsafe_dirs:
-        if enabled:
-            path.mkdir(parents=True, exist_ok=True)
-
     sandbox_name = f"pibox-{os.getpid()}"  # openshell limits names to 19 characters
     rslave_volumes = []
     docker_sidecar = None
+    kube = None
     stop_forwards = threading.Event()
     tmp = tempfile.TemporaryDirectory(dir=STATE_DIR, prefix="tmp.")
     try:
@@ -485,6 +675,16 @@ def main():
 
         image = build_images(opts.harness, opts.build, opts.pull)
         user_image = build_user_image(opts.harness, image, opts.extra_package)
+
+        providers = []
+        aws = setup_aws(user_image)
+        if aws:
+            providers.append(aws[0])
+        gcx_template = Path(tmp.name) / "gcx-config.yaml"
+        gcx = setup_gcx(gcx_template)
+        if gcx:
+            providers.append(gcx)
+        kube = setup_kube(tmp.name)
 
         # Resolve the final mount list.
         # Priority: defaults < user-provided < workdir. A later entry for the
@@ -503,9 +703,10 @@ def main():
         for path in map(Path, ["/etc/fonts", "/usr/share/fonts", "/var/cache/fontconfig"]):
             if path.is_dir():
                 mounts[path] = mount("bind", path, read_only=True)
-        for enabled, path in unsafe_dirs:
-            if enabled:
-                mounts[path] = mount("bind", path, read_only=True)
+        if kube:
+            mounts[Path(KUBECONFIG_PATH)] = mount("bind", kube[0], read_only=True)
+        if gcx:
+            mounts[Path(GCX_TEMPLATE)] = mount("bind", gcx_template, read_only=True)
         if opts.unsafe_host_wayland:
             mounts[wayland_socket] = mount("bind", wayland_socket)
         if opts.unsafe_enable_docker:
@@ -550,7 +751,9 @@ def main():
             fs_policy["read_only" if entry["read_only"] else "read_write"].append(str(target))
 
         policy = merge_policies([
-            yaml.safe_load((SCRIPT_DIR / "common" / "policy.yaml").read_text()),
+            yaml.safe_load((SCRIPT_DIR / "scripts" / "policy.yaml").read_text()),
+            {"network_policies": {"pibox-aws": aws[1]}} if aws else {},
+            {"network_policies": {"pibox-kube": kube[1]}} if kube else {},
             *user_policies,
             {"filesystem_policy": fs_policy,
              "process": {"run_as_user": str(os.getuid()), "run_as_group": str(os.getgid())}},
@@ -574,6 +777,10 @@ def main():
             env["XDG_SESSION_TYPE"] = "wayland"
         if opts.unsafe_enable_docker:
             env["DOCKER_HOST"] = f"unix://{DOCKER_RUN_DIR}/docker.sock"
+        if kube:
+            env["KUBECONFIG"] = KUBECONFIG_PATH
+        if aws:
+            env["AWS_DEFAULT_REGION"] = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or aws[2]
         if opts.harness == "pi-web":
             # openshell forwards to the same port number, so listen on the host port
             env["PI_WEB_HOSTNAME"] = "127.0.0.1"
@@ -587,6 +794,11 @@ def main():
         # Without a TTY, openshell never forwards EOF on stdin, so an agent
         # that reads stdin (pi -p) would wait forever.
         script = 'cd -- "$1" && shift && exec "$@"' + ("" if tty else " </dev/null")
+        if gcx:
+            # the provider placeholders only exist in the sandbox environment
+            script = ('mkdir -p "$HOME/.config/gcx" && python3 -c "import os, sys; '
+                      'sys.stdout.write(os.path.expandvars(open(sys.argv[1]).read()))" '
+                      f'{GCX_TEMPLATE} > "$HOME/.config/gcx/config.yaml" && ' + script)
         cmd = [
             "openshell", "sandbox", "create",
             "--name", sandbox_name,
@@ -595,6 +807,7 @@ def main():
             "--driver-config-json", json.dumps({"docker": {"mounts": driver_mounts}}),
             "--no-keep",
             "--no-auto-providers",
+            *[arg for name in providers for arg in ("--provider", name)],
             "--tty" if tty else "--no-tty",
             *[arg for key, value in env.items() if value is not None for arg in ("--env", f"{key}={value}")],
             "--", "bash", "-c", script, "pibox", str(workdir), *HARNESS_COMMANDS[opts.harness], *agent_args,
@@ -614,6 +827,9 @@ def main():
                            capture_output=True)
         # --no-keep cannot clean up when the openshell CLI itself is killed
         subprocess.run(["openshell", "sandbox", "delete", sandbox_name], capture_output=True)
+        for proc in kube[2] if kube else []:
+            proc.terminate()
+            proc.wait()
         if docker_sidecar:
             subprocess.run(["docker", "rm", "-f", docker_sidecar], capture_output=True)
         for name in rslave_volumes:
