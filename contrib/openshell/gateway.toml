@@ -1,0 +1,20 @@
+# Suggested OpenShell gateway configuration for pibox.
+#
+# Copy or merge into ~/.config/openshell/gateway.toml, then restart the gateway:
+#   systemctl --user restart openshell-gateway
+
+[openshell]
+version = 2
+
+[openshell.gateway]
+compute_driver = "docker"
+
+[openshell.drivers.docker]
+# pibox passes its mounts through --driver-config-json.
+allow_driver_config = true
+enable_bind_mounts = true
+sandbox_pids_limit = 1024
+
+# Raw bind mounts have no label resolver, so label admission must be off.
+[openshell.drivers.docker.resource_admission]
+enabled = false

@@ -7,7 +7,7 @@ RUN pacman -Syu --noconfirm --needed base-devel git \
 USER builder
 WORKDIR /home/builder
 
-RUN for pkg in tini docker-rootless-extras; do \
+RUN for pkg in docker-rootless-extras; do \
         git clone https://aur.archlinux.org/$pkg.git \
         && ( cd $pkg && PKGEXT=.pkg.tar.zst makepkg -s --noconfirm ); \
     done \
@@ -55,10 +55,7 @@ RUN pacman -Rns --noconfirm sudo openssh 2>/dev/null || true \
     && pacman -Scc --noconfirm
 
 COPY common/image_AGENTS.md /AGENTS.md
-COPY common/entrypoint.sh /entrypoint.sh
 COPY common/chromium /usr/local/bin/chromium
 COPY common/chrome-policies/pibox.json /etc/chromium/policies/managed/pibox.json
 
 WORKDIR /
-
-ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]

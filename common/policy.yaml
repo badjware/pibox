@@ -1,0 +1,44 @@
+# Default OpenShell sandbox policy for pibox.
+#
+# launch.py merges this file with the generated mount paths and process
+# identity, then with each --policy file. Network access is limited to the
+# model providers; add other hosts with --policy.
+#
+# A rule also applies to the processes that a listed binary starts, so listing
+# the harness interpreter covers the tools the agent runs.
+version: 1
+
+landlock:
+  compatibility: hard_requirement
+
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /usr
+    - /lib
+    - /etc
+    - /opt
+    - /proc
+    - /dev/urandom
+    - /var/log
+    - /AGENTS.md
+    - /CLAUDE.md
+  read_write:
+    - /tmp
+    - /dev/null
+
+network_policies:
+  databricks:
+    endpoints:
+      - host: "**.azuredatabricks.net"
+        port: 443
+        allowed_ips: [10.0.0.0/8]
+    binaries:
+      - { path: /usr/bin/node }
+  badjware:
+    endpoints:
+      - host: "*.badjware.dev"
+        port: 443
+        allowed_ips: [192.168.0.0/16]
+    binaries:
+      - { path: /usr/bin/node }

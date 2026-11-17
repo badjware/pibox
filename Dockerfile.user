@@ -1,0 +1,31 @@
+# Per-user layer built by launch.sh on top of a harness image.
+# Mirrors the host user so bind-mounted files keep their ownership, and
+# installs --extra-package requests. Build context: common/
+ARG BASE_IMAGE=ghcr.io/badjware/pibox:pi
+FROM ${BASE_IMAGE}
+
+ARG HOST_UID
+ARG HOST_GID
+ARG HOST_USER
+ARG HOST_HOME
+ARG EXTRA_PACKAGES=""
+
+# Pre-create the parents of bind-mount targets so Docker does not create them as root.
+RUN (getent group "$HOST_GID" >/dev/null || groupadd -g "$HOST_GID" "$HOST_USER") \
+    && (getent passwd "$HOST_UID" >/dev/null || useradd -u "$HOST_UID" -g "$HOST_GID" -d "$HOST_HOME" -s /bin/bash "$HOST_USER") \
+    && install -d -o "$HOST_UID" -g "$HOST_GID" \
+        "$HOST_HOME" "$HOST_HOME/.cache" "$HOST_HOME/.config" "$HOST_HOME/.local" "$HOST_HOME/.local/share"
+
+COPY install-extra-packages.sh /usr/local/lib/pibox/install-extra-packages.sh
+RUN if [ -n "$EXTRA_PACKAGES" ]; then \
+        /usr/local/lib/pibox/install-extra-packages.sh "$HOST_USER" $EXTRA_PACKAGES; \
+    fi
+
+ENV PATH=${HOST_HOME}/go/bin:${PATH}
+# billion-context (pi package) defaults to XDG paths, which are not persisted.
+# Keep its config, sessions, and log under ~/.pi, which is bind-mounted.
+ENV BILI_CONFIG_FILE=${HOST_HOME}/.pi/agent/billion-context/billion-context.json \
+    BILI_SESSIONS_DIR=${HOST_HOME}/.pi/agent/billion-context/sessions \
+    ACP_LOG_FILE=${HOST_HOME}/.pi/agent/billion-context/bili.log
+
+USER ${HOST_UID}:${HOST_GID}
