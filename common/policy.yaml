@@ -5,7 +5,8 @@
 # model providers; add other hosts with --policy.
 #
 # A rule also applies to the processes that a listed binary starts, so listing
-# the harness interpreter covers the tools the agent runs.
+# the harness binaries (node for pi, the native claude binary) covers the tools
+# the agent runs.
 version: 1
 
 landlock:
@@ -35,6 +36,7 @@ network_policies:
         allowed_ips: [10.0.0.0/8]
     binaries:
       - { path: /usr/bin/node }
+      - { path: /usr/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe }
   badjware:
     endpoints:
       - host: "*.badjware.dev"
@@ -42,3 +44,4 @@ network_policies:
         allowed_ips: [192.168.0.0/16]
     binaries:
       - { path: /usr/bin/node }
+      - { path: /usr/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe }
