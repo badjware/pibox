@@ -85,6 +85,8 @@ pibox [options] [-- <agent args>]
 ```
 
 The directory you run pibox from becomes the working directory of the agent.
+The sandbox is named after that directory (`home` for your home directory),
+with `-2`, `-3`, and so on when the name is in use.
 
 ### Flags
 
@@ -102,6 +104,8 @@ The directory you run pibox from becomes the working directory of the agent.
 | `--policy <file>`              |       | Use this policy file instead of `$OPENSHELL_SANDBOX_POLICY` or `~/.config/openshell/policy.yaml`.                   |
 | `--unsafe-enable-docker`       |       | Start a rootless Docker daemon in a privileged container next to the sandbox, and let the agent use it.             |
 | `--unsafe-host-wayland`        |       | Mount the Wayland socket into the sandbox and forward the Wayland environment variables.                            |
+| `--unsafe-kube-write`          |       | Let `kubectl` change the clusters. Without it, Kubernetes access is read-only.                                      |
+| `--unsafe-gcx-write`           |       | Let `gcx` change Grafana. Without it, Grafana access is read-only.                                                  |
 
 Any arguments after `--` go to the agent.
 
@@ -213,13 +217,18 @@ AWS_PROFILE=my-profile pibox
 stack of the current context (`current-context`), through the `GRAFANA_SERVER`
 and `GRAFANA_TOKEN` environment variables. The token is a placeholder. The proxy adds the real token to each request from `gcx` to the Grafana
 host. The provider adds the network rule for that host. To use another stack, change the current context before you start pibox.
+Access is read-only by default: the rule allows `GET`, `HEAD`, and `OPTIONS`,
+and `POST` only for queries (`/api/ds/query` and Pyroscope). Use
+`--unsafe-gcx-write` to allow every request.
 
 **Kubernetes.** pibox starts one `kubectl proxy` per context of your
 kubeconfig, on a random port on `127.0.0.1`. The sandbox gets a kubeconfig
 without credentials that points at these proxies. pibox adds the network rule
 for the proxy ports after the sandbox starts, so `kubectl` can fail during
-the first seconds of a session. `get`, `logs`, `exec`, and
-`cp` work. `port-forward` does not, because the OpenShell proxy blocks it.
+the first seconds of a session. Access is read-only by default: the rule
+allows `GET`, `HEAD`, and `OPTIONS`, so `get`, `describe`, and `logs` work, but
+`apply`, `delete`, `exec`, and `cp` do not. Use `--unsafe-kube-write` to allow
+every request. `port-forward` does not work, because the OpenShell proxy blocks it.
 While the session runs, any local process can use the proxy ports.
 
 The providers stay in the gateway between sessions, and each launch updates

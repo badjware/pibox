@@ -14,6 +14,8 @@ _pibox() {
         '--policy[OpenShell policy file]:policy file:_files -g "*.(yaml|yml)"' \
         '--unsafe-enable-docker[start a rootless Docker daemon in a privileged sidecar container]' \
         '--unsafe-host-wayland[mount the Wayland socket into the sandbox]' \
+        '--unsafe-kube-write[allow kubectl requests that change the clusters]' \
+        '--unsafe-gcx-write[allow gcx requests that change Grafana]' \
         '(-)--[forward remaining args to the agent]:: :_default'
 }
 

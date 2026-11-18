@@ -92,6 +92,10 @@ def parse_args(argv):
     p.add_argument("--unsafe-enable-docker", action="store_true",
                    help="start a rootless Docker daemon in a privileged sidecar container")
     p.add_argument("--unsafe-host-wayland", action="store_true", help="mount the Wayland socket into the sandbox")
+    p.add_argument("--unsafe-kube-write", action="store_true",
+                   help="allow kubectl requests that change the clusters (default: read-only)")
+    p.add_argument("--unsafe-gcx-write", action="store_true",
+                   help="allow gcx requests that change Grafana (default: read-only)")
     p.add_argument("--sac-moe-patience", action="store_true", help=argparse.SUPPRESS)
     return p.parse_args(argv), agent_args
 
@@ -408,7 +412,7 @@ def setup_aws(image):
     return names[profile], config[profile].get("region")
 
 
-def setup_gcx():
+def setup_gcx(write):
     """Expose the host gcx stacks to the sandbox through bearer token injection.
 
     Each stack token from ~/.config/gcx/config.yaml is stored in its own
@@ -416,6 +420,10 @@ def setup_gcx():
     the stack, but only the stack of the current context is used by the
     sandbox. The provider sets GRAFANA_TOKEN to a placeholder, and the
     returned GRAFANA_* variables select the server of the stack.
+
+    Args:
+        write: allow every request. Otherwise only read methods and the
+            POST query APIs are allowed.
 
     Returns:
         A tuple (provider name, dict of GRAFANA_* environment variables), or
@@ -430,6 +438,17 @@ def setup_gcx():
     if not stacks:
         return None
 
+    if write:
+        access = {"access": "full"}
+    else:
+        # Queries are POST requests, so the read-only preset is not enough.
+        # Without enforcement: enforce, OpenShell only logs denied requests.
+        rules = [{"allow": {"method": m, "path": "**"}} for m in ("GET", "HEAD", "OPTIONS")]
+        rules += [{"allow": {"method": "POST", "path": p}} for p in (
+            "/api/ds/query",
+            "/api/datasources/uid/*/resources/querier.v1.QuerierService/**",  # Pyroscope
+        )]
+        access = {"enforcement": "enforce", "rules": rules}
     names = {s: "pibox-gcx-" + re.sub(r"[^a-z0-9-]", "-", s.lower()) for s in stacks}
     for stack, name in names.items():
         url = urlsplit(stacks[stack]["server"])
@@ -440,7 +459,7 @@ def setup_gcx():
             "category": "other",
             "credentials": [{"name": "token", "env_vars": ["GRAFANA_TOKEN"], "required": True,
                              "auth_style": "bearer", "header_name": "authorization"}],
-            "endpoints": [{"host": url.hostname, "port": url.port or 443, "protocol": "rest", "access": "full"}],
+            "endpoints": [{"host": url.hostname, "port": url.port or 443, "protocol": "rest", **access}],
             # The image gcx, or a host build from a mounted ~/go, which comes first in PATH.
             "binaries": ["/usr/local/bin/gcx", f"{HOME}/go/bin/gcx"],
         })
@@ -519,7 +538,7 @@ def setup_kube(work_dir):
     return path, sorted(ports.values()), procs
 
 
-def add_kube_rule(sandbox_name, ports, stop):
+def add_kube_rule(sandbox_name, ports, write, stop):
     """Allow kubectl to reach the kubectl proxies once the sandbox exists.
 
     The proxy ports change with each session, so the rule is added to the
@@ -530,14 +549,36 @@ def add_kube_rule(sandbox_name, ports, stop):
     Args:
         sandbox_name: name of the sandbox.
         ports: kubectl proxy ports on the host.
+        write: allow every request. Otherwise only GET, HEAD, and OPTIONS
+            are allowed.
         stop: threading.Event that ends the retries.
     """
     cmd = ["openshell", "policy", "update", sandbox_name, "--binary", "/usr/bin/kubectl", "--wait"]
     for port in ports:
-        cmd += ["--add-endpoint", f"host.openshell.internal:{port}"]
+        cmd += ["--add-endpoint", f"host.openshell.internal:{port}" + ("" if write else ":read-only:rest:enforce")]
     while not stop.wait(1):
         if subprocess.run(cmd, capture_output=True).returncode == 0:
             return
+
+
+def pick_sandbox_name(workdir):
+    """Return a free sandbox name based on the working directory name.
+
+    Like the tmux sessions: "home" for $HOME, else the directory name, with
+    -2, -3, ... appended when the name is taken.
+
+    Args:
+        workdir: resolved working directory.
+    """
+    base = "home" if workdir == HOME else re.sub(r"[^a-z0-9-]", "-", workdir.name.lower()).strip("-") or "root"
+    out = run(["openshell", "sandbox", "list", "-o", "json"], capture_output=True, text=True).stdout
+    taken = {s["name"] for s in json.loads(out or "{}").get("sandboxes") or []}
+    # openshell limits names to 19 characters
+    name, i = base[:19], 2
+    while name in taken:
+        suffix = f"-{i}"
+        name, i = base[:19 - len(suffix)] + suffix, i + 1
+    return name
 
 
 def keep_forwards(sandbox_name, ports, stop):
@@ -588,6 +629,10 @@ def main():
         wayland_socket = Path(runtime_dir) / os.environ["WAYLAND_DISPLAY"]
         if not wayland_socket.is_socket():
             die(f"Wayland socket not found: {wayland_socket}")
+    if opts.unsafe_kube_write:
+        confirm("--unsafe-kube-write lets the agent change your Kubernetes clusters", skip)
+    if opts.unsafe_gcx_write:
+        confirm("--unsafe-gcx-write lets the agent change your Grafana stack", skip)
     workdir = Path.cwd().resolve()
 
     status = subprocess.run(["openshell", "status", "-o", "json"], capture_output=True, text=True)
@@ -600,7 +645,7 @@ def main():
     if opts.harness == "claude":
         (HOME / ".claude").mkdir(exist_ok=True)
         (HOME / ".claude.json").touch()
-    sandbox_name = f"pibox-{os.getpid()}"  # openshell limits names to 19 characters
+    sandbox_name = pick_sandbox_name(workdir)
     rslave_volumes = []
     docker_sidecar = None
     kube_procs = []
@@ -612,7 +657,7 @@ def main():
         user_image = build_user_image(opts.harness, image, opts.extra_package)
 
         aws_provider, aws_region = setup_aws(user_image) or (None, None)
-        gcx_provider, gcx_env = setup_gcx() or (None, {})
+        gcx_provider, gcx_env = setup_gcx(opts.unsafe_gcx_write) or (None, {})
         providers = [p for p in (aws_provider, gcx_provider) if p]
         kubeconfig, kube_ports, kube_procs = setup_kube(tmp.name) or (None, [], [])
 
@@ -664,6 +709,8 @@ def main():
                 # with rslave lets host mounts made under the source after
                 # launch appear in the sandbox.
                 name = f"{sandbox_name}-{len(rslave_volumes)}"
+                # a volume left by a killed session would keep its old source
+                subprocess.run(["docker", "volume", "rm", name], capture_output=True)
                 run(["docker", "volume", "create", "--driver", "local", "--opt", "type=none",
                      "--opt", f"device={source}", "--opt", "o=rbind,rslave", name], stdout=subprocess.DEVNULL)
                 rslave_volumes.append(name)
@@ -728,7 +775,8 @@ def main():
                                               daemon=True)
             forward_thread.start()
         if kube_ports:
-            threading.Thread(target=add_kube_rule, args=(sandbox_name, kube_ports, stop_threads), daemon=True).start()
+            threading.Thread(target=add_kube_rule, args=(sandbox_name, kube_ports, opts.unsafe_kube_write, stop_threads),
+                             daemon=True).start()
         print(f"+ {shlex.join(cmd)}", file=sys.stderr)
         return subprocess.run(cmd).returncode
     finally:
