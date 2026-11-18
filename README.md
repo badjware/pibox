@@ -94,11 +94,8 @@ The directory you run pibox from becomes the working directory of the agent.
 | `--harness pi\|claude\|pi-web` | `-H`  | Choose the agent to run. Defaults to `pi`.                                                                          |
 | `--build`                      |       | Build the images locally from the Dockerfiles instead of using the published images.                                |
 | `--pull`                       |       | Update the image before launching.                                                                                  |
-| `--ephemeral`, `--tmp`         |       | Start in a temporary working directory instead of the current one.                                                  |
-| `--workdir <dir>`              | `-w`  | Use `<dir>` as the working directory. Incompatible with `--ephemeral`.                                              |
 | `--read-only`, `--ro`          | `-r`  | Mount the working directory read-only.                                                                              |
 | `--volume <spec>`              | `-v`  | Mount a volume. Repeatable, `docker run -v` syntax. `PATH` or `PATH:ro\|rw` mounts `PATH` at the same path.         |
-| `--mount <spec>`               | `-m`  | Add a mount. Repeatable, `docker run --mount` syntax.                                                               |
 | `--env <var>[=<value>]`        | `-e`  | Set an environment variable. Repeatable, `docker run -e` syntax.                                                    |
 | `--extra-package <name>`       | `-P`  | Install an extra pacman or AUR package in the per-user image. Repeatable.                                           |
 | `--port <spec>`                | `-p`  | Forward a sandbox port to the same port on the host. Repeatable, `[IP:]PORT`.                                       |
@@ -109,9 +106,7 @@ The directory you run pibox from becomes the working directory of the agent.
 Any arguments after `--` go to the agent.
 
 `--volume` accepts the options `ro`, `rw`, `rslave`, `slave`, `private`, and
-`rprivate`. `--mount` accepts `type` (`bind`, `volume`, `tmpfs`), `src`, `dst`,
-`readonly`, `bind-propagation`, and `tmpfs-size`. pibox rejects other options.
-Bind sources cannot be under `/tmp`, because the gateway runs with a private
+`rprivate`. pibox rejects other options. Bind sources cannot be under `/tmp`, because the gateway runs with a private
 `/tmp`.
 
 ### Examples
@@ -167,7 +162,7 @@ pibox stops when the file does not exist. The suggested policy in
 - Files: the system paths, `~/develop`, and the paths that pibox mounts by
   default. Landlock blocks everything else, including mounts that are not in
   the policy. A working directory outside `~/develop` is mounted, but the agent
-  cannot read it. Add the paths you mount with `--volume` or `--mount`.
+  cannot read it. Add the paths you mount with `--volume`.
 - Network: the model endpoints. Everything else fails: package registries,
   GitHub, web pages.
 
@@ -266,7 +261,6 @@ The image does not have `sudo`, `ssh`, `scp`, or `wget`.
 | ---------------------------- | ---------------------------- | -------------------------- |
 | working directory            | same path                    | rw (ro from `$HOME`)       |
 | `~/.pi`                      | `~/.pi`                      | rw                         |
-| `~/.pi/agent/extensions`     | `~/.pi/agent/extensions`     | ro                         |
 | `~/.claude` (claude)         | `~/.claude`                  | rw                         |
 | `~/.claude.json` (claude)    | `~/.claude.json`             | rw                         |
 | `~/.gitconfig`               | `~/.gitconfig`               | ro                         |

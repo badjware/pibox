@@ -54,9 +54,9 @@ Gateway quirks that shape `launch.py`:
 
 ## Mounts
 
-`launch.py` keeps a mount table keyed by target (defaults < user `--volume`/`--mount` < workdir; a later entry for the same target wins) and turns it into `--driver-config-json`. Landlock still applies to bind mounts, and pibox does not change the policy, so a mount target outside the policy `filesystem_policy` paths is mounted but not accessible.
+`launch.py` keeps a mount table keyed by target (defaults < user `--volume` < workdir; a later entry for the same target wins) and turns it into `--driver-config-json`. Landlock still applies to bind mounts, and pibox does not change the policy, so a mount target outside the policy `filesystem_policy` paths is mounted but not accessible.
 
-- OpenShell bind mounts accept only `source`, `target`, `read_only`, and `selinux_label`, and are always `rprivate`. An `rslave` bind (the workdir, `-v ...:rslave`, `--mount bind-propagation=rslave`) becomes a Docker `local` volume with `o=rbind,rslave`, created per session and removed on exit.
+- OpenShell bind mounts accept only `source`, `target`, `read_only`, and `selinux_label`, and are always `rprivate`. An `rslave` bind (the workdir or `-v ...:rslave`) becomes a Docker `local` volume with `o=rbind,rslave`, created per session and removed on exit.
 - Named volumes are created with `docker volume create` first, because the driver never creates them.
 - When launched from `$HOME`, the workdir is read-only unless a `--volume` for `$HOME` is given. The whole home directory is then visible, including host credentials and dotfiles such as `~/.bashrc` (kept on purpose).
 - `--read-only` applies to the workdir only. pi needs `~/.pi` writable.
@@ -100,11 +100,8 @@ Provider profiles and providers stay in the gateway between sessions; each launc
 | `--pull` | | pull latest image before launch |
 | `--unsafe-enable-docker` | (none, intentional) | start a rootless dockerd in a privileged sidecar container and share its socket |
 | `--unsafe-host-wayland` | (none, intentional) | mount the Wayland socket into the sandbox and forward Wayland env vars |
-| `--ephemeral`, `--tmp` | | use a temp workdir under `~/.cache/pibox/` |
-| `--workdir` | `-w` | use the given directory as the workdir instead of the current one (incompatible with `--ephemeral`) |
 | `--read-only`, `--ro` | `-r` | mount the workdir read-only |
 | `--volume` | `-v` | mount a volume (repeatable; Docker `-v` syntax with options `ro`, `rw`, `rslave`, `slave`, `private`, `rprivate`; `PATH` or `PATH:ro\|rw` mounts `PATH` at the same absolute path) |
-| `--mount` | `-m` | add a mount (repeatable; Docker `--mount` syntax with `type`, `src`, `dst`, `readonly`, `bind-propagation`, `tmpfs-size`) |
 | `--env` | `-e` | set an environment variable (repeatable; Docker `-e` syntax; `VAR` alone copies the host value; overrides variables set by pibox) |
 | `--extra-package` | `-P` | install an extra pacman or AUR package in the per-user image (repeatable) |
 | `--port` | `-p` | forward a sandbox port to the same host port (repeatable; `[IP:]PORT`, or Docker `-p` syntax with equal ports) |
@@ -131,16 +128,13 @@ OpenShell sandboxes cannot run a Docker daemon (non-root, seccomp, no `mount`). 
 
 Zsh completion lives at `completions/_pibox`. When adding, removing, or renaming a flag in `launch.py`, update `completions/_pibox` to match. The flag list is duplicated by design (no auto-generation); keep the two in sync.
 
-Convention: list only the longest long form of each flag in the completion. Short forms (`-b`, `-p`, etc.) and shorter long-form aliases (e.g. `--tmp` for `--ephemeral`, `--ro` for `--read-only`) still work at the parser level but are omitted from the menu to reduce noise. One entry per flag, no duplicates.
+Convention: list only the longest long form of each flag in the completion. Short forms (`-b`, `-p`, etc.) and shorter long-form aliases (e.g. `--ro` for `--read-only`) still work at the parser level but are omitted from the menu to reduce noise. One entry per flag, no duplicates.
 
 `--help` / `-h` prints the argparse usage summary from `launch.py`.
 
 ## launch.py guards
 
-`launch.py` prompts the user for confirmation before proceeding in the following cases:
-- running as root
-- any `--unsafe-*` option is active
-- any `--port` is given
+`launch.py` prompts the user for confirmation before proceeding when any `--unsafe-*` option is active.
 
 When adding new unsafe options, always add a call to the `confirm` helper to prompt the user.
 
@@ -172,7 +166,7 @@ When editing agent-facing instructions that need to persist from one run to anot
 
 ## pi extensions
 
-The host's `~/.pi/agent/extensions` directory is mounted read-only into the sandbox, so any pi extensions installed on the host (including `pi-claude-interop`, which lives in its own repo) are available inside pibox automatically. pibox itself ships no bundled extensions.
+The host's `~/.pi` directory is mounted read-write into the sandbox, so any pi extensions installed on the host (including `pi-claude-interop`, which lives in its own repo) are available inside pibox automatically. pibox itself ships no bundled extensions.
 
 `USER_DOCKERFILE` sets `BILI_CONFIG_FILE`, `BILI_SESSIONS_DIR`, and `ACP_LOG_FILE` so the `billion-context` pi package (installed under `~/.pi/agent/npm` and available through the `~/.pi` mount) keeps its state under `~/.pi/agent/billion-context/` instead of the unpersisted XDG directories. `--env` overrides them.
 

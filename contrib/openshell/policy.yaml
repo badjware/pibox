@@ -29,7 +29,6 @@ filesystem_policy:
     - /proc
     - /dev/urandom
     - /var/log
-    - /home/user/.pi/agent/extensions
     - /home/user/.gitconfig
   read_write:
     - /tmp

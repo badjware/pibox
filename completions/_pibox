@@ -6,11 +6,8 @@ _pibox() {
         '--build[build images locally instead of pulling]' \
         '--pull[pull latest image before launch]' \
         '--harness[agent to run]:harness:(pi claude pi-web)' \
-        '--ephemeral[use a temp workdir]' \
-        '--workdir[use a directory as the workdir instead of the current one]:directory:_files -/' \
         '--read-only[mount the workdir read-only]' \
         '*--volume[mount a volume (Docker -v syntax)]:volume:_files' \
-        '*--mount[add a mount (Docker --mount syntax)]:mount:' \
         '*--env[set an environment variable in the sandbox]:variable:_parameters -g "*export*"' \
         '*--extra-package[install an extra pacman or AUR package in the image]:package:' \
         '*--port[forward a sandbox port to the same host port]:port:' \

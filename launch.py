@@ -76,14 +76,10 @@ def parse_args(argv):
     p.add_argument("-H", "--harness", choices=IMAGES, default="pi", help="agent to run (default: pi)")
     p.add_argument("--build", action="store_true", help="build images locally instead of pulling")
     p.add_argument("--pull", action="store_true", help="pull latest image before launch")
-    p.add_argument("--ephemeral", "--tmp", action="store_true", help="use a temp workdir")
-    p.add_argument("-w", "--workdir", help="use WORKDIR as the workdir instead of the current directory")
     p.add_argument("-r", "--read-only", "--ro", action="store_true", help="mount the workdir read-only")
     p.add_argument("-v", "--volume", action="append", default=[],
                    help="mount a volume (repeatable; Docker -v syntax); "
                         "PATH or PATH:ro|rw mounts PATH at the same path")
-    p.add_argument("-m", "--mount", action="append", default=[],
-                   help="add a mount (repeatable; Docker --mount syntax)")
     p.add_argument("-e", "--env", action="append", default=[],
                    help="set an environment variable (repeatable; Docker -e syntax)")
     p.add_argument("-P", "--extra-package", action="append", default=[],
@@ -127,17 +123,16 @@ def run(cmd, **kwargs):
     return subprocess.run(cmd, check=True, **kwargs)
 
 
-def mount(kind, source, read_only=False, rslave=False, size_bytes=None):
+def mount(source, read_only=False, rslave=False):
     """Return a mount entry for the mount table.
 
     Args:
-        kind: "bind", "volume", or "tmpfs".
-        source: host path for a bind mount, volume name for a volume, None for tmpfs.
+        source: absolute host path for a bind mount, or volume name for a
+            named volume.
         read_only: mount read-only.
         rslave: propagate host mounts made under a bind source after launch.
-        size_bytes: size limit of a tmpfs mount.
     """
-    return {"type": kind, "source": source, "read_only": read_only, "rslave": rslave, "size_bytes": size_bytes}
+    return {"source": str(source), "read_only": read_only, "rslave": rslave}
 
 
 def parse_volume(spec):
@@ -166,36 +161,7 @@ def parse_volume(spec):
             rslave = True
         elif opt not in ("private", "rprivate"):
             die(f"unsupported --volume option: {opt}")
-    return target, mount("bind" if source.startswith("/") else "volume", source, read_only, rslave)
-
-
-def parse_mount(spec):
-    """Parse a --mount value (Docker --mount syntax).
-
-    Supports type, source/src, target/destination/dst, readonly/ro,
-    bind-propagation, and tmpfs-size.
-
-    Returns:
-        A tuple (target path, mount entry).
-    """
-    fields = {}
-    for item in spec.split(","):
-        key, eq, value = item.partition("=")
-        fields[key] = value if eq else "true"
-    kind = fields.pop("type", "volume")
-    source = fields.pop("source", None) or fields.pop("src", None)
-    target = fields.pop("target", None) or fields.pop("destination", None) or fields.pop("dst", None)
-    readonly = fields.pop("readonly", None) or fields.pop("ro", None) or "false"
-    propagation = fields.pop("bind-propagation", "rprivate")
-    size = fields.pop("tmpfs-size", None)
-    if fields:
-        die(f"unsupported --mount keys: {', '.join(fields)}")
-    if kind not in ("bind", "volume", "tmpfs") or not target or (kind != "tmpfs" and not source):
-        die(f"invalid --mount: {spec}")
-    if propagation not in ("rslave", "slave", "private", "rprivate"):
-        die(f"unsupported --mount bind-propagation: {propagation}")
-    return target, mount(kind, source, readonly in ("true", "1"), propagation in ("rslave", "slave"),
-                         int(size) if size else None)
+    return target, mount(source, read_only, rslave)
 
 
 def parse_env(spec):
@@ -603,7 +569,7 @@ def main():
     opts, agent_args = parse_args(sys.argv[1:])
 
     # parse everything before prompting or starting anything
-    user_mounts = [parse_volume(v) for v in opts.volume] + [parse_mount(m) for m in opts.mount]
+    user_mounts = [parse_volume(v) for v in opts.volume]
     user_env = dict(parse_env(e) for e in opts.env)
     policy_file = Path(opts.policy or os.environ.get("OPENSHELL_SANDBOX_POLICY") or DEFAULT_POLICY).expanduser()
     if not policy_file.is_file():
@@ -611,32 +577,25 @@ def main():
     ports = [parse_port(p) for p in opts.port]
 
     skip = opts.sac_moe_patience
-    if os.getuid() == 0:
-        confirm("running as root", skip)
     if opts.unsafe_enable_docker:
         confirm("--unsafe-enable-docker starts a privileged container, "
                 "and the network policy does not apply to the containers it runs", skip)
     if opts.unsafe_host_wayland:
         confirm("--unsafe-host-wayland mounts the Wayland socket into the sandbox", skip)
-        runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
-        wayland_socket = Path(runtime_dir) / os.environ.get("WAYLAND_DISPLAY", "")
         if not os.environ.get("WAYLAND_DISPLAY"):
             die("--unsafe-host-wayland requires WAYLAND_DISPLAY to be set")
+        runtime_dir = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+        wayland_socket = Path(runtime_dir) / os.environ["WAYLAND_DISPLAY"]
         if not wayland_socket.is_socket():
             die(f"Wayland socket not found: {wayland_socket}")
-    for port in ports:
-        confirm(f"--port publishes {port} on the host", skip)
-
-    if opts.workdir and opts.ephemeral:
-        die("--workdir cannot be used with --ephemeral")
-    workdir = Path(opts.workdir or os.getcwd()).resolve(strict=True)
+    workdir = Path.cwd().resolve()
 
     status = subprocess.run(["openshell", "status", "-o", "json"], capture_output=True, text=True)
     if status.returncode != 0 or json.loads(status.stdout or "{}").get("status") != "connected":
         die("the OpenShell gateway is not reachable (see contrib/openshell/gateway.toml)", 1)
 
     # ensure these exist on the host so Docker does not create them as root
-    (HOME / ".pi" / "agent" / "extensions").mkdir(parents=True, exist_ok=True)
+    (HOME / ".pi").mkdir(exist_ok=True)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     if opts.harness == "claude":
         (HOME / ".claude").mkdir(exist_ok=True)
@@ -644,69 +603,63 @@ def main():
     sandbox_name = f"pibox-{os.getpid()}"  # openshell limits names to 19 characters
     rslave_volumes = []
     docker_sidecar = None
-    kube = None
+    kube_procs = []
     stop_threads = threading.Event()
+    forward_thread = None
     tmp = tempfile.TemporaryDirectory(dir=STATE_DIR, prefix="tmp.")
     try:
-        if opts.ephemeral:
-            workdir = Path(tmp.name) / "workdir"
-            workdir.mkdir()
-            # save pi sessions in the temp workdir
-            if opts.harness == "pi" and "--session-dir" not in agent_args:
-                session_dir = workdir / ".pi" / "sessions"
-                session_dir.mkdir(parents=True)
-                agent_args += ["--session-dir", str(session_dir)]
-
         image = build_images(opts.harness, opts.build, opts.pull)
         user_image = build_user_image(opts.harness, image, opts.extra_package)
 
-        providers = []
-        aws = setup_aws(user_image)
-        if aws:
-            providers.append(aws[0])
-        gcx = setup_gcx()
-        if gcx:
-            providers.append(gcx[0])
-        kube = setup_kube(tmp.name)
+        aws_provider, aws_region = setup_aws(user_image) or (None, None)
+        gcx_provider, gcx_env = setup_gcx() or (None, {})
+        providers = [p for p in (aws_provider, gcx_provider) if p]
+        kubeconfig, kube_ports, kube_procs = setup_kube(tmp.name) or (None, [], [])
 
         # Resolve the final mount list.
         # Priority: defaults < user-provided < workdir. A later entry for the
         # same target wins, but keeps the position of the first one.
         mounts = {
-            HOME / ".pi": mount("bind", HOME / ".pi"),
-            HOME / ".pi/agent/extensions": mount("bind", HOME / ".pi/agent/extensions", read_only=True),
-            HOME / ".cache": mount("volume", "pibox-cache"),
+            HOME / ".pi": mount(HOME / ".pi"),
+            HOME / ".cache": mount("pibox-cache"),
         }
         if opts.harness == "claude":
-            mounts[HOME / ".claude"] = mount("bind", HOME / ".claude")
+            mounts[HOME / ".claude"] = mount(HOME / ".claude")
             # claude really hates to have its config file read-only
-            mounts[HOME / ".claude.json"] = mount("bind", HOME / ".claude.json")
+            mounts[HOME / ".claude.json"] = mount(HOME / ".claude.json")
         if (HOME / ".gitconfig").is_file():
-            mounts[HOME / ".gitconfig"] = mount("bind", HOME / ".gitconfig", read_only=True)
-        if kube:
-            mounts[Path(KUBECONFIG_PATH)] = mount("bind", kube[0], read_only=True)
+            mounts[HOME / ".gitconfig"] = mount(HOME / ".gitconfig", read_only=True)
+        if kubeconfig:
+            mounts[Path(KUBECONFIG_PATH)] = mount(kubeconfig, read_only=True)
         if opts.unsafe_host_wayland:
-            mounts[wayland_socket] = mount("bind", wayland_socket)
+            mounts[wayland_socket] = mount(wayland_socket)
         if opts.unsafe_enable_docker:
             docker_run_dir = Path(tmp.name) / "docker"
             docker_run_dir.mkdir()
-            mounts[Path(DOCKER_RUN_DIR)] = mount("bind", docker_run_dir)
+            mounts[Path(DOCKER_RUN_DIR)] = mount(docker_run_dir)
         for target, entry in user_mounts:
             mounts[Path(target)] = entry
         # When launched from $HOME, the workdir is read-only to avoid exposing
-        # the whole home directory rw. An explicit --volume for $HOME wins.
-        if not (workdir == HOME and HOME in mounts and not opts.read_only):
-            mounts[workdir] = mount("bind", workdir, read_only=opts.read_only or workdir == HOME, rslave=True)
+        # the whole home directory rw. An explicit --volume for $HOME wins,
+        # unless --read-only is given.
+        home_volume = workdir == HOME and HOME in mounts
+        if opts.read_only or not home_volume:
+            mounts[workdir] = mount(workdir, read_only=opts.read_only or workdir == HOME, rslave=True)
 
         driver_mounts = []
         for target, entry in mounts.items():
-            source = str(entry["source"])
-            if entry["type"] == "bind":
-                if source == "/tmp" or source.startswith("/tmp/"):
-                    die(f"cannot mount {source}: the OpenShell gateway runs with a private /tmp")
-                if not Path(source).exists():
-                    die(f"cannot mount {source}: no such file or directory")
-            if entry["type"] == "bind" and entry["rslave"]:
+            source = entry["source"]
+            driver_mount = {"type": "bind", "source": source, "target": str(target),
+                            "read_only": entry["read_only"]}
+            if not source.startswith("/"):
+                # docker run creates missing named volumes; the openshell driver does not
+                run(["docker", "volume", "create", source], stdout=subprocess.DEVNULL)
+                driver_mount["type"] = "volume"
+            elif source == "/tmp" or source.startswith("/tmp/"):
+                die(f"cannot mount {source}: the OpenShell gateway runs with a private /tmp")
+            elif not Path(source).exists():
+                die(f"cannot mount {source}: no such file or directory")
+            elif entry["rslave"]:
                 # OpenShell bind mounts are always rprivate; a local volume
                 # with rslave lets host mounts made under the source after
                 # launch appear in the sandbox.
@@ -714,17 +667,8 @@ def main():
                 run(["docker", "volume", "create", "--driver", "local", "--opt", "type=none",
                      "--opt", f"device={source}", "--opt", "o=rbind,rslave", name], stdout=subprocess.DEVNULL)
                 rslave_volumes.append(name)
-                driver_mounts.append({"type": "volume", "source": name, "target": str(target),
-                                      "read_only": entry["read_only"]})
-            elif entry["type"] == "tmpfs":
-                driver_mounts.append({"type": "tmpfs", "target": str(target),
-                                      **({"size_bytes": entry["size_bytes"]} if entry["size_bytes"] else {})})
-            else:
-                if entry["type"] == "volume":
-                    # docker run creates missing named volumes; the openshell driver does not
-                    run(["docker", "volume", "create", source], stdout=subprocess.DEVNULL)
-                driver_mounts.append({"type": entry["type"], "source": source, "target": str(target),
-                                      "read_only": entry["read_only"]})
+                driver_mount.update(type="volume", source=name)
+            driver_mounts.append(driver_mount)
 
         env = {
             "HOME": str(HOME),
@@ -742,17 +686,18 @@ def main():
             env["XDG_SESSION_TYPE"] = "wayland"
         if opts.unsafe_enable_docker:
             env["DOCKER_HOST"] = f"unix://{DOCKER_RUN_DIR}/docker.sock"
-        if kube:
+        if kubeconfig:
             env["KUBECONFIG"] = KUBECONFIG_PATH
-        if gcx:
-            env.update(gcx[1])
-        if aws:
-            env["AWS_DEFAULT_REGION"] = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or aws[1]
+        env.update(gcx_env)
+        if aws_provider:
+            env["AWS_DEFAULT_REGION"] = (os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION")
+                                         or aws_region)
         if opts.harness == "pi-web":
             # openshell forwards to the same port number, so listen on the host port
             env["PI_WEB_HOSTNAME"] = "127.0.0.1"
-            env["PORT"] = PI_WEB_PORT
-            if not ports:
+            if ports:
+                env["PORT"] = PI_WEB_PORT
+            else:
                 env["PORT"] = os.environ.get("PIBOX_PI_WEB_PORT") or PI_WEB_PORT
                 ports = [f"127.0.0.1:{env['PORT']}"]
         env.update(user_env)
@@ -779,19 +724,24 @@ def main():
             start_docker_sidecar(docker_sidecar, user_image, workdir, docker_run_dir)
         if ports:
             # --forward cannot be combined with --no-keep
-            threading.Thread(target=keep_forwards, args=(sandbox_name, ports, stop_threads), daemon=True).start()
-        if kube and kube[1]:
-            threading.Thread(target=add_kube_rule, args=(sandbox_name, kube[1], stop_threads), daemon=True).start()
+            forward_thread = threading.Thread(target=keep_forwards, args=(sandbox_name, ports, stop_threads),
+                                              daemon=True)
+            forward_thread.start()
+        if kube_ports:
+            threading.Thread(target=add_kube_rule, args=(sandbox_name, kube_ports, stop_threads), daemon=True).start()
         print(f"+ {shlex.join(cmd)}", file=sys.stderr)
         return subprocess.run(cmd).returncode
     finally:
         stop_threads.set()
+        if forward_thread:
+            # so that it does not restart a forward stopped below
+            forward_thread.join()
         for spec in ports:
             subprocess.run(["openshell", "forward", "stop", spec.rsplit(":", 1)[-1], sandbox_name],
                            capture_output=True)
         # --no-keep cannot clean up when the openshell CLI itself is killed
         subprocess.run(["openshell", "sandbox", "delete", sandbox_name], capture_output=True)
-        for proc in kube[2] if kube else []:
+        for proc in kube_procs:
             proc.terminate()
             proc.wait()
         if docker_sidecar:
