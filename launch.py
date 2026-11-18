@@ -548,7 +548,8 @@ def setup_gcx():
     rule = {
         "endpoints": [{"host": url.hostname, "port": url.port or 443, "protocol": "rest", "access": "full",
                        "credential_binding": {"provider": names[stack]}}],
-        "binaries": [{"path": "/usr/local/bin/gcx"}],
+        # The image gcx, or a host build from a mounted ~/go, which comes first in PATH.
+        "binaries": [{"path": "/usr/local/bin/gcx"}, {"path": f"{HOME}/go/bin/gcx"}],
     }
     return names[stack], rule, env
 
@@ -1014,6 +1015,9 @@ network_policies:
       - host: "*.badjware.dev"
         port: 443
         allowed_ips: [192.168.0.0/16]
+      # Exact host, so it is also reachable through its public address.
+      - host: genai.badjware.dev
+        port: 443
     binaries:
       - { path: /usr/bin/node }
       - { path: /usr/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe }
