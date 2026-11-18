@@ -43,8 +43,8 @@ HARNESS_COMMANDS = {
     "pi-web": ["pi-web"],
 }
 PI_WEB_PORT = "30141"
-# Policy merged before the --policy files when it exists.
-GLOBAL_POLICY = HOME / ".config" / "pibox" / "policy.yaml"
+# Sandbox policy used when neither --policy nor OPENSHELL_SANDBOX_POLICY is set.
+DEFAULT_POLICY = HOME / ".config" / "openshell" / "policy.yaml"
 # Socket directory of the --unsafe-enable-docker sidecar, at the same path in
 # the sidecar and the sandbox. It must be outside /run, which rootlesskit
 # copies up into its own mount namespace.
@@ -91,8 +91,8 @@ def parse_args(argv):
     p.add_argument("-p", "--port", action="append", default=[],
                    help="forward a sandbox port to the same host port (repeatable; [IP:]PORT); "
                         f"pi-web listens on {PI_WEB_PORT} unless PIBOX_PI_WEB_PORT is set")
-    p.add_argument("--policy", action="append", default=[],
-                   help="merge an OpenShell policy file into the default policy (repeatable)")
+    p.add_argument("--policy", help="OpenShell policy file (default: $OPENSHELL_SANDBOX_POLICY, "
+                                     "or ~/.config/openshell/policy.yaml)")
     p.add_argument("--unsafe-enable-docker", action="store_true",
                    help="start a rootless Docker daemon in a privileged sidecar container")
     p.add_argument("--unsafe-host-wayland", action="store_true", help="mount the Wayland socket into the sandbox")
@@ -125,62 +125,6 @@ def confirm(msg, skip):
 def run(cmd, **kwargs):
     """Run a command and raise CalledProcessError if it fails."""
     return subprocess.run(cmd, check=True, **kwargs)
-
-
-def deep_merge(base, override):
-    """Return base deep-merged with override; values from override win."""
-    if not isinstance(base, dict) or not isinstance(override, dict):
-        return override
-    merged = dict(base)
-    for key, value in override.items():
-        merged[key] = deep_merge(base[key], value) if key in base else value
-    return merged
-
-
-def merge_policies(policies):
-    """Merge OpenShell policies in order.
-
-    network_policies rules are replaced by name, filesystem_policy path lists
-    are concatenated without duplicates, and every other key is deep-merged
-    with later policies winning.
-
-    Args:
-        policies: list of policy dicts.
-
-    Returns:
-        The merged policy dict.
-    """
-    merged = {}
-    for policy in policies:
-        rules = {name: rule for name, rule in merged.get("network_policies", {}).items()
-                 if name not in policy.get("network_policies", {})}
-        old_fs = merged.get("filesystem_policy", {})
-        new_fs = policy.get("filesystem_policy", {})
-        merged = deep_merge({**merged, "network_policies": rules}, policy)
-        for key in ("read_only", "read_write"):
-            paths = old_fs.get(key, []) + new_fs.get(key, [])
-            merged.setdefault("filesystem_policy", {})[key] = list(dict.fromkeys(paths))
-    return merged
-
-
-def load_user_policy(path):
-    """Load a --policy file or the global policy file.
-
-    The process section is rejected because the workload identity must match
-    the per-user image.
-
-    Returns:
-        The policy dict.
-    """
-    try:
-        policy = yaml.safe_load(Path(path).read_text()) or {}
-    except (OSError, yaml.YAMLError) as e:
-        die(f"{path}: {e}")
-    if not isinstance(policy, dict):
-        die(f"{path}: not a YAML mapping")
-    if "process" in policy:
-        die(f"{path}: the process section is set by pibox")
-    return policy
 
 
 def mount(kind, source, read_only=False, rslave=False, size_bytes=None):
@@ -451,14 +395,15 @@ def setup_aws(image):
     used by the sandbox. OpenShell signs with fixed AWS_* keys, so a sandbox
     cannot hold more than one AWS provider. The sandbox only gets
     placeholders; the OpenShell proxy re-signs every AWS request with the real
-    credentials, so the IAM policy of the profile controls access.
+    credentials, so the IAM policy of the profile controls access. The
+    provider profile lists the AWS endpoints, so attaching the provider adds
+    their network rule to the sandbox.
 
     Args:
         image: per-user image, whose AWS CLI lists the AWS services.
 
     Returns:
-        A tuple (provider name, network policy rule, region), or None when
-        the profile is not found.
+        A tuple (provider name, region), or None when the profile is not found.
     """
     profile = os.environ.get("AWS_PROFILE") or "default"
     config = configparser.RawConfigParser()
@@ -467,6 +412,9 @@ def setup_aws(image):
     if not sections:
         return None
 
+    out = run(["docker", "run", "--rm", "-i", "--entrypoint", "python3", image, "-"],
+              input=AWS_ENDPOINTS_SCRIPT, capture_output=True, text=True)
+    generated = json.loads(out.stdout)
     upsert_profile({
         "id": "pibox-aws",
         "display_name": "pibox AWS",
@@ -477,6 +425,10 @@ def setup_aws(image):
             {"name": "secret_access_key", "env_vars": ["AWS_SECRET_ACCESS_KEY"], "required": True},
             {"name": "session_token", "env_vars": ["AWS_SESSION_TOKEN"], "required": False},
         ],
+        "endpoints": [{"host": e["host"], "port": 443, "protocol": "rest", "access": "full",
+                       "credential_signing": "sigv4", **{k: v for k, v in e.items() if k != "host"}}
+                      for e in generated["endpoints"]],
+        "binaries": [generated["interpreter"]],
     })
     names = {s: "pibox-aws-" + re.sub(r"[^a-z0-9-]", "-", s.lower()) for s in sections}
     for section, name in names.items():
@@ -487,32 +439,21 @@ def setup_aws(image):
         upsert_provider(name, "pibox-aws", credentials)
     if profile not in names:
         return None
-    name = names[profile]
-
-    out = run(["docker", "run", "--rm", "-i", "--entrypoint", "python3", image, "-"],
-              input=AWS_ENDPOINTS_SCRIPT, capture_output=True, text=True)
-    generated = json.loads(out.stdout)
-    rule = {
-        "endpoints": [{"host": e["host"], "port": 443, "protocol": "rest", "access": "full",
-                       "credential_binding": {"provider": name}, "credential_signing": "sigv4",
-                       **{k: v for k, v in e.items() if k != "host"}} for e in generated["endpoints"]],
-        "binaries": [{"path": generated["interpreter"]}],
-    }
-    return name, rule, config[profile].get("region")
+    return names[profile], config[profile].get("region")
 
 
 def setup_gcx():
     """Expose the host gcx stacks to the sandbox through bearer token injection.
 
     Each stack token from ~/.config/gcx/config.yaml is stored in its own
-    provider, but only the stack of the current context is used by the
+    provider, with its own provider profile that lists the Grafana host of
+    the stack, but only the stack of the current context is used by the
     sandbox. The provider sets GRAFANA_TOKEN to a placeholder, and the
     returned GRAFANA_* variables select the server of the stack.
 
     Returns:
-        A tuple (provider name, network policy rule, dict of GRAFANA_*
-        environment variables), or None when the current context has no
-        stack with a token.
+        A tuple (provider name, dict of GRAFANA_* environment variables), or
+        None when the current context has no stack with a token.
     """
     try:
         config = yaml.safe_load((HOME / ".config" / "gcx" / "config.yaml").read_text())
@@ -523,17 +464,21 @@ def setup_gcx():
     if not stacks:
         return None
 
-    upsert_profile({
-        "id": "pibox-gcx",
-        "display_name": "pibox gcx",
-        "description": "Grafana token of a gcx stack from the host gcx configuration",
-        "category": "other",
-        "credentials": [{"name": "token", "env_vars": ["GRAFANA_TOKEN"], "required": True,
-                         "auth_style": "bearer", "header_name": "authorization"}],
-    })
     names = {s: "pibox-gcx-" + re.sub(r"[^a-z0-9-]", "-", s.lower()) for s in stacks}
     for stack, name in names.items():
-        upsert_provider(name, "pibox-gcx", {"GRAFANA_TOKEN": stacks[stack]["token"]})
+        url = urlsplit(stacks[stack]["server"])
+        upsert_profile({
+            "id": name,
+            "display_name": f"pibox gcx {stack}",
+            "description": f"Grafana token of the gcx stack {stack} from the host gcx configuration",
+            "category": "other",
+            "credentials": [{"name": "token", "env_vars": ["GRAFANA_TOKEN"], "required": True,
+                             "auth_style": "bearer", "header_name": "authorization"}],
+            "endpoints": [{"host": url.hostname, "port": url.port or 443, "protocol": "rest", "access": "full"}],
+            # The image gcx, or a host build from a mounted ~/go, which comes first in PATH.
+            "binaries": ["/usr/local/bin/gcx", f"{HOME}/go/bin/gcx"],
+        })
+        upsert_provider(name, name, {"GRAFANA_TOKEN": stacks[stack]["token"]})
 
     context = (config.get("contexts") or {}).get(config.get("current-context")) or {}
     stack = context.get("stack")
@@ -544,14 +489,7 @@ def setup_gcx():
     for key in ["org-id", "stack-id"]:
         if grafana.get(key):
             env["GRAFANA_" + key.upper().replace("-", "_")] = str(grafana[key])
-    url = urlsplit(grafana["server"])
-    rule = {
-        "endpoints": [{"host": url.hostname, "port": url.port or 443, "protocol": "rest", "access": "full",
-                       "credential_binding": {"provider": names[stack]}}],
-        # The image gcx, or a host build from a mounted ~/go, which comes first in PATH.
-        "binaries": [{"path": "/usr/local/bin/gcx"}, {"path": f"{HOME}/go/bin/gcx"}],
-    }
-    return names[stack], rule, env
+    return names[stack], env
 
 
 def setup_kube(work_dir):
@@ -566,8 +504,8 @@ def setup_kube(work_dir):
         work_dir: directory for the generated kubeconfig and the proxy logs.
 
     Returns:
-        A tuple (kubeconfig path, network policy rule, proxy processes), or
-        None when there is no kubectl context on the host.
+        A tuple (kubeconfig path, proxy ports, proxy processes), or None when
+        there is no kubectl context on the host.
     """
     if not shutil.which("kubectl"):
         return None
@@ -612,9 +550,28 @@ def setup_kube(work_dir):
         kubeconfig["current-context"] = config["current-context"]
     path = Path(work_dir) / "kubeconfig"
     path.write_text(yaml.safe_dump(kubeconfig, sort_keys=False))
-    rule = {"endpoints": [{"host": "host.openshell.internal", "ports": sorted(ports.values())}],
-            "binaries": [{"path": "/usr/bin/kubectl"}]}
-    return path, rule, procs
+    return path, sorted(ports.values()), procs
+
+
+def add_kube_rule(sandbox_name, ports, stop):
+    """Allow kubectl to reach the kubectl proxies once the sandbox exists.
+
+    The proxy ports change with each session, so the rule is added to the
+    running sandbox instead of the policy file. OpenShell names the rules,
+    because --rule-name accepts only one endpoint. Retries until it succeeds
+    or stop is set.
+
+    Args:
+        sandbox_name: name of the sandbox.
+        ports: kubectl proxy ports on the host.
+        stop: threading.Event that ends the retries.
+    """
+    cmd = ["openshell", "policy", "update", sandbox_name, "--binary", "/usr/bin/kubectl", "--wait"]
+    for port in ports:
+        cmd += ["--add-endpoint", f"host.openshell.internal:{port}"]
+    while not stop.wait(1):
+        if subprocess.run(cmd, capture_output=True).returncode == 0:
+            return
 
 
 def keep_forwards(sandbox_name, ports, stop):
@@ -648,7 +605,9 @@ def main():
     # parse everything before prompting or starting anything
     user_mounts = [parse_volume(v) for v in opts.volume] + [parse_mount(m) for m in opts.mount]
     user_env = dict(parse_env(e) for e in opts.env)
-    user_policies = [load_user_policy(p) for p in ([GLOBAL_POLICY] if GLOBAL_POLICY.is_file() else []) + opts.policy]
+    policy_file = Path(opts.policy or os.environ.get("OPENSHELL_SANDBOX_POLICY") or DEFAULT_POLICY).expanduser()
+    if not policy_file.is_file():
+        die(f"policy file not found: {policy_file} (see contrib/openshell/policy.yaml)")
     ports = [parse_port(p) for p in opts.port]
 
     skip = opts.sac_moe_patience
@@ -686,7 +645,7 @@ def main():
     rslave_volumes = []
     docker_sidecar = None
     kube = None
-    stop_forwards = threading.Event()
+    stop_threads = threading.Event()
     tmp = tempfile.TemporaryDirectory(dir=STATE_DIR, prefix="tmp.")
     try:
         if opts.ephemeral:
@@ -743,7 +702,6 @@ def main():
             mounts[workdir] = mount("bind", workdir, read_only=opts.read_only or workdir == HOME, rslave=True)
 
         driver_mounts = []
-        fs_policy = {"read_only": [], "read_write": [str(HOME)]}
         for target, entry in mounts.items():
             source = str(entry["source"])
             if entry["type"] == "bind":
@@ -770,19 +728,6 @@ def main():
                     run(["docker", "volume", "create", source], stdout=subprocess.DEVNULL)
                 driver_mounts.append({"type": entry["type"], "source": source, "target": str(target),
                                       "read_only": entry["read_only"]})
-            fs_policy["read_only" if entry["read_only"] else "read_write"].append(str(target))
-
-        policy = merge_policies([
-            yaml.safe_load(DEFAULT_POLICY),
-            {"network_policies": {"pibox-aws": aws[1]}} if aws else {},
-            {"network_policies": {"pibox-gcx": gcx[1]}} if gcx else {},
-            {"network_policies": {"pibox-kube": kube[1]}} if kube else {},
-            *user_policies,
-            {"filesystem_policy": fs_policy,
-             "process": {"run_as_user": str(os.getuid()), "run_as_group": str(os.getgid())}},
-        ])
-        policy_file = Path(tmp.name) / "policy.yaml"
-        policy_file.write_text(yaml.safe_dump(policy, sort_keys=False))
 
         env = {
             "HOME": str(HOME),
@@ -803,9 +748,9 @@ def main():
         if kube:
             env["KUBECONFIG"] = KUBECONFIG_PATH
         if gcx:
-            env.update(gcx[2])
+            env.update(gcx[1])
         if aws:
-            env["AWS_DEFAULT_REGION"] = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or aws[2]
+            env["AWS_DEFAULT_REGION"] = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or aws[1]
         if opts.harness == "pi-web":
             # openshell forwards to the same port number, so listen on the host port
             env["PI_WEB_HOSTNAME"] = "127.0.0.1"
@@ -837,11 +782,13 @@ def main():
             start_docker_sidecar(docker_sidecar, user_image, workdir, docker_run_dir)
         if ports:
             # --forward cannot be combined with --no-keep
-            threading.Thread(target=keep_forwards, args=(sandbox_name, ports, stop_forwards), daemon=True).start()
+            threading.Thread(target=keep_forwards, args=(sandbox_name, ports, stop_threads), daemon=True).start()
+        if kube and kube[1]:
+            threading.Thread(target=add_kube_rule, args=(sandbox_name, kube[1], stop_threads), daemon=True).start()
         print(f"+ {shlex.join(cmd)}", file=sys.stderr)
         return subprocess.run(cmd).returncode
     finally:
-        stop_forwards.set()
+        stop_threads.set()
         for spec in ports:
             subprocess.run(["openshell", "forward", "stop", spec.rsplit(":", 1)[-1], sandbox_name],
                            capture_output=True)
@@ -967,60 +914,6 @@ ENV BILI_CONFIG_FILE=${HOST_HOME}/.pi/agent/billion-context/billion-context.json
     ACP_LOG_FILE=${HOST_HOME}/.pi/agent/billion-context/bili.log
 
 USER ${HOST_UID}:${HOST_GID}
-'''
-
-# Default sandbox policy, merged by main() with the generated parts and the --policy files.
-DEFAULT_POLICY = r'''# Default OpenShell sandbox policy for pibox.
-#
-# launch.py merges this policy with the generated credential rules, then with
-# ~/.config/pibox/policy.yaml and each --policy file, then with the generated
-# mount paths and process identity. Network access is limited to the model
-# providers; add other hosts with ~/.config/pibox/policy.yaml or --policy.
-#
-# A rule also applies to the processes that a listed binary starts, so listing
-# the harness binaries (node for pi, the native claude binary) covers the tools
-# the agent runs.
-version: 1
-
-landlock:
-  compatibility: hard_requirement
-
-filesystem_policy:
-  include_workdir: true
-  read_only:
-    - /usr
-    - /lib
-    - /etc
-    - /opt
-    - /proc
-    - /dev/urandom
-    - /var/log
-    - /AGENTS.md
-    - /CLAUDE.md
-  read_write:
-    - /tmp
-    - /dev/null
-
-network_policies:
-  databricks:
-    endpoints:
-      - host: "**.azuredatabricks.net"
-        port: 443
-        allowed_ips: [10.0.0.0/8]
-    binaries:
-      - { path: /usr/bin/node }
-      - { path: /usr/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe }
-  badjware:
-    endpoints:
-      - host: "*.badjware.dev"
-        port: 443
-        allowed_ips: [192.168.0.0/16]
-      # Exact host, so it is also reachable through its public address.
-      - host: genai.badjware.dev
-        port: 443
-    binaries:
-      - { path: /usr/bin/node }
-      - { path: /usr/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe }
 '''
 
 # Piped to python3 in the per-user image by setup_aws().

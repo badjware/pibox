@@ -3,7 +3,7 @@
 ## Overview
 
 pibox runs AI coding agents (pi and Claude Code) in an [OpenShell](https://github.com/NVIDIA/OpenShell) sandbox, using the OpenShell Docker compute driver.
-`launch.py` builds a per-user image, generates a sandbox policy and a mount list, and runs `openshell sandbox create --no-keep` with the agent as the trailing command.
+`launch.py` builds a per-user image, generates a mount list, and runs `openshell sandbox create --no-keep` with the agent as the trailing command.
 The working directory is mounted at the same path, and the workload runs as the host UID/GID so files keep their ownership.
 
 Only the Docker driver is supported. Podman is deferred (see TODO).
@@ -21,13 +21,13 @@ common/                             # files copied into images only
   chromium, chrome-policies/        # chromium wrapper and policies
 contrib/
   openshell/gateway.toml            # suggested gateway configuration
+  openshell/policy.yaml             # suggested sandbox policy (~/.config/openshell/policy.yaml)
   systemd/                          # pi-web user units
 completions/_pibox                  # zsh completion
 ```
 
 `launch.py` must work when copied alone (for example to `~/.local/bin/pibox`), so it reads no file from the repo at runtime; only `--build` uses the Dockerfiles. Files it needs are embedded as strings at the end of `launch.py`:
 - `USER_DOCKERFILE`: the per-user layer, built with `docker build -` (no context). It embeds the `--extra-package` installer with a `COPY <<'EOF'` heredoc.
-- `DEFAULT_POLICY`: the default sandbox policy.
 - `AWS_ENDPOINTS_SCRIPT`: piped to `python3` in the per-user image to list the AWS SigV4 endpoints.
 
 Files that are copied into the published images live in `common/`.
@@ -45,7 +45,7 @@ Gateway quirks that shape `launch.py`:
 ## Sandbox runtime
 
 - OpenShell replaces the image entrypoint with its own supervisor, so nothing runs as root at startup. Everything that used to be in the entrypoint moved to build time (`USER_DOCKERFILE`) or to `launch.py`.
-- OpenShell rejects root workloads. The policy `process.run_as_user`/`run_as_group` set the host UID/GID, and `USER_DOCKERFILE` creates the matching user with `-d "$HOME"`.
+- OpenShell rejects root workloads. `USER_DOCKERFILE` creates the host user with `-d "$HOME"` and ends with `USER <uid>:<gid>`, which the Docker driver uses when the policy has no `process` section.
 - OpenShell sets `HOME=/sandbox` and `USER=<uid>`, so `launch.py` passes `HOME`, `USER`, `TERM`, `TZ`, and `COLORTERM` with `--env`. Image `ENV` is kept, and `--env` overrides it.
 - The agent starts in `/sandbox` (the OpenShell workspace root); the trailing command is `bash -c 'cd -- "$1" && shift && exec "$@"' pibox <workdir> <harness command> <agent args>`.
 - Without a TTY, `openshell sandbox create --no-tty` never forwards stdin EOF, so `launch.py` appends `</dev/null` to the trailing command (like the old `docker run` without `-i`).
@@ -54,7 +54,7 @@ Gateway quirks that shape `launch.py`:
 
 ## Mounts
 
-`launch.py` keeps a mount table keyed by target (defaults < user `--volume`/`--mount` < workdir; a later entry for the same target wins) and turns it into `--driver-config-json` plus `filesystem_policy` paths. Landlock still applies to bind mounts, so every mount target is added to the policy.
+`launch.py` keeps a mount table keyed by target (defaults < user `--volume`/`--mount` < workdir; a later entry for the same target wins) and turns it into `--driver-config-json`. Landlock still applies to bind mounts, and pibox does not change the policy, so a mount target outside the policy `filesystem_policy` paths is mounted but not accessible.
 
 - OpenShell bind mounts accept only `source`, `target`, `read_only`, and `selinux_label`, and are always `rprivate`. An `rslave` bind (the workdir, `-v ...:rslave`, `--mount bind-propagation=rslave`) becomes a Docker `local` volume with `o=rbind,rslave`, created per session and removed on exit.
 - Named volumes are created with `docker volume create` first, because the driver never creates them.
@@ -63,23 +63,30 @@ Gateway quirks that shape `launch.py`:
 
 ## Network policy
 
-`DEFAULT_POLICY` is the default policy: Landlock `hard_requirement`, the system paths, and the user's model endpoints. `launch.py` merges, in order: the default policy, the generated AWS, gcx, and kube rules, the global policy `~/.config/pibox/policy.yaml` (`GLOBAL_POLICY`, only when it exists), each `--policy` file, then the generated filesystem paths and process identity (`merge_policies`: network rules replaced by name, filesystem lists concatenated, everything else deep-merged). A global or `--policy` file with a `process` section is rejected.
+pibox passes one policy file to `openshell sandbox create --policy`, unchanged: `--policy`, else `$OPENSHELL_SANDBOX_POLICY`, else `~/.config/openshell/policy.yaml` (`DEFAULT_POLICY`). It stops when the file does not exist. The user owns the file; `contrib/openshell/policy.yaml` is the suggested start, with absolute paths because YAML expands nothing.
 
-OpenShell takes one base policy per sandbox and never writes back to it. Rules added at runtime (`openshell policy update`, advisor approvals) die with the sandbox.
+The suggested policy allows `~/develop` and the default mount targets, and uses Landlock `best_effort`: with `hard_requirement`, OpenShell stops the sandbox when a listed path does not exist (for example `~/.claude` with the pi harness, or `~/develop` when it is not mounted).
+
+The credential rules are not in the policy file. AWS and gcx rules come from endpoint-bearing provider profiles (OpenShell adds `_provider_*` rules for attached providers). The kube rule is added at runtime with `openshell policy update` (`add_kube_rule`).
+
+OpenShell takes one base policy per sandbox and never writes back to it. Rules added at runtime (`openshell policy update`, advisor approvals) die with the sandbox. OpenShell 0.1.8 has no `openshell policy lint`; test a policy with a real sandbox.
+
+A gateway-global policy (`openshell policy set --global`) is not usable: it replaces every sandbox policy and suppresses provider rules.
 
 Policy facts worth knowing:
 - A rule also applies to the processes that a listed binary starts, so `/usr/bin/node` (pi) and the native `claude.exe` cover the tools the agent runs.
 - Wildcard hosts need three labels; `**` is allowed only as the whole first label.
 - Exact hostnames can reach private IPs; wildcard and hostless endpoints need `allowed_ips`.
+- Endpoints that overlap on a port must have the same metadata. For example, `*.example.com` with `allowed_ips` and `foo.example.com` without it are rejected (`network endpoint ambiguity validation failed`).
 - OpenShell blocks every connection upgrade on `protocol: rest` endpoints except through `protocol: websocket` endpoints, and it drops `kubectl port-forward` upgrades in every configuration tested.
 
 ## Credentials
 
 AWS, gcx, and kube activate automatically when their host configuration exists. None of them puts a real credential in the sandbox.
 
-- **AWS** (`setup_aws`): stores every profile from `~/.aws/credentials` in its own provider `pibox-aws-<profile>` (profile type `pibox-aws`, endpointless), and attaches only the one named by the host `AWS_PROFILE` (default `default`). A sandbox cannot hold more than one AWS provider: the signer reads the fixed `AWS_*` keys and OpenShell rejects two attached providers with the same key. `AWS_ENDPOINTS_SCRIPT` runs in the per-user image and lists one SigV4 endpoint per AWS service from the bundled botocore models; each gets `credential_signing: sigv4` and `credential_binding.provider`. Only the image's Python interpreter may reach them. The sandbox sees placeholder `AWS_*` variables and the proxy re-signs requests, so IAM controls access. Credentials are assumed not to rotate during a session.
-- **gcx** (`setup_gcx`): stores each stack token from `~/.config/gcx/config.yaml` in its own provider `pibox-gcx-<stack>` (profile type `pibox-gcx`, endpointless, one bearer credential `GRAFANA_TOKEN`), and attaches only the stack of `current-context`. The rule `pibox-gcx` binds that provider to the Grafana host of the stack with `credential_binding.provider`, with `/usr/local/bin/gcx` and `~/go/bin/gcx` as the only binaries (`USER_DOCKERFILE` puts `~/go/bin` first in `PATH`, so a mounted `~/go` shadows the image gcx). The sandbox gets no gcx config file: gcx reads the placeholder `GRAFANA_TOKEN` and the `GRAFANA_SERVER`, `GRAFANA_ORG_ID`, and `GRAFANA_STACK_ID` variables set from that stack. When the workdir is `$HOME`, gcx also loads the host config, and the variables override its current context.
-- **kube** (`setup_kube`): starts one `kubectl proxy --port 0` per host context on `127.0.0.1`, accepting only the host `host.openshell.internal` and allowing `exec`/`attach` (`--reject-paths '^$'`). The sandbox kubeconfig (`/etc/pibox/kubeconfig`, `KUBECONFIG`) has no credentials and points at `http://host.openshell.internal:<port>`. The rule `pibox-kube` allows `/usr/bin/kubectl` on those ports. The proxies stop at the end of the session. `port-forward` does not work.
+- **AWS** (`setup_aws`): stores every profile from `~/.aws/credentials` in its own provider `pibox-aws-<profile>` (profile type `pibox-aws`), and attaches only the one named by the host `AWS_PROFILE` (default `default`). A sandbox cannot hold more than one AWS provider: the signer reads the fixed `AWS_*` keys and OpenShell rejects two attached providers with the same key. `AWS_ENDPOINTS_SCRIPT` runs in the per-user image and lists one SigV4 endpoint per AWS service from the bundled botocore models; they go into the `pibox-aws` profile with `credential_signing: sigv4`, so the attached provider adds their rule. Only the image's Python interpreter may reach them. The sandbox sees placeholder `AWS_*` variables and the proxy re-signs requests, so IAM controls access. Credentials are assumed not to rotate during a session.
+- **gcx** (`setup_gcx`): stores each stack token from `~/.config/gcx/config.yaml` in its own provider `pibox-gcx-<stack>` with its own profile of the same name (one bearer credential `GRAFANA_TOKEN`), and attaches only the stack of `current-context`. Each profile lists the Grafana host of its stack as its endpoint, because endpoints belong to the profile, with `/usr/local/bin/gcx` and `~/go/bin/gcx` as the only binaries (`USER_DOCKERFILE` puts `~/go/bin` first in `PATH`, so a mounted `~/go` shadows the image gcx). The sandbox gets no gcx config file: gcx reads the placeholder `GRAFANA_TOKEN` and the `GRAFANA_SERVER`, `GRAFANA_ORG_ID`, and `GRAFANA_STACK_ID` variables set from that stack. When the workdir is `$HOME`, gcx also loads the host config, and the variables override its current context.
+- **kube** (`setup_kube`): starts one `kubectl proxy --port 0` per host context on `127.0.0.1`, accepting only the host `host.openshell.internal` and allowing `exec`/`attach` (`--reject-paths '^$'`). The sandbox kubeconfig (`/etc/pibox/kubeconfig`, `KUBECONFIG`) has no credentials and points at `http://host.openshell.internal:<port>`. The ports change with each session, so a background thread (`add_kube_rule`) runs `openshell policy update --wait` once the sandbox exists, with one `--add-endpoint` per port for `/usr/bin/kubectl`. `--rule-name` accepts only one endpoint, so OpenShell names the rules. `kubectl` fails until the rule loads. The proxies stop at the end of the session. `port-forward` does not work.
 
 Provider profiles and providers stay in the gateway between sessions; each launch overwrites them. Credential values reach the `openshell` CLI through its environment, not its arguments.
 
@@ -101,7 +108,7 @@ Provider profiles and providers stay in the gateway between sessions; each launc
 | `--env` | `-e` | set an environment variable (repeatable; Docker `-e` syntax; `VAR` alone copies the host value; overrides variables set by pibox) |
 | `--extra-package` | `-P` | install an extra pacman or AUR package in the per-user image (repeatable) |
 | `--port` | `-p` | forward a sandbox port to the same host port (repeatable; `[IP:]PORT`, or Docker `-p` syntax with equal ports) |
-| `--policy` | | merge an OpenShell policy file into the default policy, after `~/.config/pibox/policy.yaml` (repeatable) |
+| `--policy` | | OpenShell policy file to use instead of `$OPENSHELL_SANDBOX_POLICY` or `~/.config/openshell/policy.yaml` |
 | `--` | | remaining args forwarded to the agent inside the sandbox |
 
 Unsafe options (`--unsafe-*`) intentionally have no short form to reduce the risk of accidental use.
@@ -175,5 +182,5 @@ The host's `~/.pi/agent/extensions` directory is mounted read-only into the sand
 2. Split `~/.pi` and `~/.claude` into copied configuration, read-write state directories only, and providers for secrets. Today a sandboxed agent can change code and instructions that the host pi loads (`npm/`, `packages/`, `git/`, `settings.json`, `skills/`, `AGENTS.md`).
 3. Install fonts in the base image and remove the font mounts.
 4. Support the Podman driver (needs subordinate UID/GID ranges for the host user).
-5. Before deleting the sandbox, print the network rules added during the session so the user can copy them into a `--policy` file.
+5. Before deleting the sandbox, print the network rules added during the session so the user can copy them into the policy file.
 6. Serve `kubectl proxy` over a Unix socket mounted into the sandbox (with a TCP forwarder inside) instead of loopback ports that any local process can use.

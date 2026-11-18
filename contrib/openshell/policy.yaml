@@ -1,0 +1,61 @@
+# Suggested OpenShell sandbox policy for pibox.
+#
+# Copy it to ~/.config/openshell/policy.yaml, or point OPENSHELL_SANDBOX_POLICY or
+# --policy at your copy. Replace /home/user with your home directory and 1000
+# with your UID. YAML does not expand ~ or variables.
+#
+# Landlock blocks every path that is not listed here, including mounted paths,
+# so the agent can only use a workdir under ~/develop. Paths that do not exist
+# in a session (for example ~/.claude with the pi harness) are skipped because
+# of best_effort; hard_requirement would stop the sandbox at startup.
+#
+# The AWS, gcx, and kube rules come from pibox, not from this file.
+#
+# A rule also applies to the processes that a listed binary starts, so listing
+# the harness binaries (node for pi, the native claude binary) covers the tools
+# the agent runs.
+version: 1
+
+landlock:
+  compatibility: best_effort
+
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /usr
+    - /lib
+    - /etc
+    - /opt
+    - /proc
+    - /dev/urandom
+    - /var/log
+    - /home/user/.pi/agent/extensions
+    - /home/user/.gitconfig
+  read_write:
+    - /tmp
+    - /dev/null
+    - /home/user/develop
+    - /home/user/.pi
+    - /home/user/.cache
+    - /home/user/.claude
+    - /home/user/.claude.json
+    # --unsafe-host-wayland and --unsafe-enable-docker
+    - /run/user/1000
+    - /pibox-docker
+
+network_policies:
+  databricks:
+    endpoints:
+      - host: "**.azuredatabricks.net"
+        port: 443
+        allowed_ips: [10.0.0.0/8]
+    binaries:
+      - { path: /usr/bin/node }
+      - { path: /usr/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe }
+  badjware:
+    endpoints:
+      - host: "genai.badjware.dev"
+        port: 443
+    binaries:
+      - { path: /usr/bin/node }
+      - { path: /usr/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe }

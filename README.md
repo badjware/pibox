@@ -26,7 +26,7 @@ At each launch, `launch.py`:
    you request with `--extra-package`. Docker caches it.
 3. Sets up credentials for AWS, Grafana (`gcx`), and Kubernetes when you have
    them on the host. The real credentials stay outside the sandbox.
-4. Generates the sandbox policy and the mount list.
+4. Generates the mount list.
 5. Runs `openshell sandbox create` with the agent, and deletes the sandbox when
    the agent exits.
 
@@ -53,6 +53,15 @@ openshell status
 
 The configuration selects the Docker driver and turns on the bind mounts that
 pibox needs. Every sandbox on this gateway can then use bind mounts.
+
+Copy the suggested sandbox policy, then replace `/home/user` with your home
+directory and `1000` with your UID:
+
+```sh
+cp contrib/openshell/policy.yaml ~/.config/openshell/policy.yaml
+```
+
+See [Policy](#policy) for what it allows.
 
 Put `launch.py` in your `PATH`. It is self-contained, so a copy works:
 
@@ -93,7 +102,7 @@ The directory you run pibox from becomes the working directory of the agent.
 | `--env <var>[=<value>]`        | `-e`  | Set an environment variable. Repeatable, `docker run -e` syntax.                                                    |
 | `--extra-package <name>`       | `-P`  | Install an extra pacman or AUR package in the per-user image. Repeatable.                                           |
 | `--port <spec>`                | `-p`  | Forward a sandbox port to the same port on the host. Repeatable, `[IP:]PORT`.                                       |
-| `--policy <file>`              |       | Merge an OpenShell policy file into the default policy, after `~/.config/pibox/policy.yaml`. Repeatable.            |
+| `--policy <file>`              |       | Use this policy file instead of `$OPENSHELL_SANDBOX_POLICY` or `~/.config/openshell/policy.yaml`.                   |
 | `--unsafe-enable-docker`       |       | Start a rootless Docker daemon in a privileged container next to the sandbox, and let the agent use it.             |
 | `--unsafe-host-wayland`        |       | Mount the Wayland socket into the sandbox and forward the Wayland environment variables.                            |
 
@@ -143,14 +152,28 @@ recursive, so an AUR package with AUR-only dependencies fails to build, and so
 does a package that checks a PGP signature. The build runs once and Docker
 caches it until the package list or the image changes.
 
-## Network access
+## Policy
 
-By default, the sandbox reaches only the model endpoints in the default
-policy (`DEFAULT_POLICY` in `launch.py`). Everything else fails: package registries, GitHub, web
-pages. Add what a project needs with `--policy`:
+pibox gives OpenShell one policy file, and does not change it. It uses the
+first of:
+
+1. `--policy <file>`
+2. `$OPENSHELL_SANDBOX_POLICY`
+3. `~/.config/openshell/policy.yaml`
+
+pibox stops when the file does not exist. The suggested policy in
+`contrib/openshell/policy.yaml` allows:
+
+- Files: the system paths, `~/develop`, and the paths that pibox mounts by
+  default. Landlock blocks everything else, including mounts that are not in
+  the policy. A working directory outside `~/develop` is mounted, but the agent
+  cannot read it. Add the paths you mount with `--volume` or `--mount`.
+- Network: the model endpoints. Everything else fails: package registries,
+  GitHub, web pages.
+
+A network rule lists the hosts and the programs that can reach them:
 
 ```yaml
-# github.yaml
 network_policies:
   github:
     endpoints:
@@ -160,25 +183,17 @@ network_policies:
       - { path: /usr/bin/node }
 ```
 
-```sh
-pibox --policy github.yaml
-```
-
-A rule lists the hosts and the programs that can reach them. It also applies to
-the processes that a listed program starts, so `/usr/bin/node` covers the tools
-that pi runs. pibox merges each `--policy` file into the default policy. A rule
-with the same name replaces the earlier rule, and filesystem paths add to the
-default lists. A `process` section is not allowed. See the
+A rule also applies to the processes that a listed program starts, so
+`/usr/bin/node` covers the tools that pi runs. See the
 [OpenShell policy reference](https://docs.nvidia.com/openshell/how-it-works/policies/schema)
 for the format.
 
-To use a policy in every session, put it in `~/.config/pibox/policy.yaml`.
-pibox merges this file, when it exists, before the `--policy` files, so a
-`--policy` rule with the same name replaces its rule.
+The AWS, Grafana, and Kubernetes rules come from pibox (see
+[Credentials](#credentials)), so the policy file does not need them.
 
 Rules that you approve while the sandbox runs, for example with
 `openshell policy update`, disappear with the sandbox. Put the rules you keep
-in a file.
+in your policy file.
 
 ## Credentials
 
@@ -189,7 +204,8 @@ host. The agent uses them normally, but it never sees a real credential.
 OpenShell provider, and gives the sandbox the profile named by `AWS_PROFILE`
 (or `default`). The sandbox gets
 placeholder `AWS_*` variables, and the OpenShell proxy signs every AWS request
-with the real credentials. The IAM policy of the profile decides what the agent
+with the real credentials. The provider adds the network rule for the AWS
+endpoints. The IAM policy of the profile decides what the agent
 can do. Only one profile works per session, so start pibox with the profile
 you need:
 
@@ -201,11 +217,13 @@ AWS_PROFILE=my-profile pibox
 `~/.config/gcx/config.yaml` in its own provider. The sandbox gets only the
 stack of the current context (`current-context`), through the `GRAFANA_SERVER`
 and `GRAFANA_TOKEN` environment variables. The token is a placeholder. The proxy adds the real token to each request from `gcx` to the Grafana
-host. To use another stack, change the current context before you start pibox.
+host. The provider adds the network rule for that host. To use another stack, change the current context before you start pibox.
 
 **Kubernetes.** pibox starts one `kubectl proxy` per context of your
 kubeconfig, on a random port on `127.0.0.1`. The sandbox gets a kubeconfig
-without credentials that points at these proxies. `get`, `logs`, `exec`, and
+without credentials that points at these proxies. pibox adds the network rule
+for the proxy ports after the sandbox starts, so `kubectl` can fail during
+the first seconds of a session. `get`, `logs`, `exec`, and
 `cp` work. `port-forward` does not, because the OpenShell proxy blocks it.
 While the session runs, any local process can use the proxy ports.
 
