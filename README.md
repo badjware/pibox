@@ -181,8 +181,9 @@ in a file.
 pibox sets up these tools automatically when their configuration exists on the
 host. The agent uses them normally, but it never sees a real credential.
 
-**AWS.** pibox reads the profile named by `AWS_PROFILE` (or `default`) from
-`~/.aws/credentials` and stores it in an OpenShell provider. The sandbox gets
+**AWS.** pibox stores each profile from `~/.aws/credentials` in its own
+OpenShell provider, and gives the sandbox the profile named by `AWS_PROFILE`
+(or `default`). The sandbox gets
 placeholder `AWS_*` variables, and the OpenShell proxy signs every AWS request
 with the real credentials. The IAM policy of the profile decides what the agent
 can do. Only one profile works per session, so start pibox with the profile
@@ -192,10 +193,11 @@ you need:
 AWS_PROFILE=my-profile pibox
 ```
 
-**Grafana (gcx).** pibox stores the stack tokens from
-`~/.config/gcx/config.yaml` in a provider and gives the sandbox a copy of the
-configuration with placeholders. The proxy adds the real token to each request
-from `gcx` to the Grafana hosts.
+**Grafana (gcx).** pibox stores each stack token from
+`~/.config/gcx/config.yaml` in its own provider. The sandbox gets only the
+current context (`current-context`) and its stack, with a placeholder for the
+token. The proxy adds the real token to each request from `gcx` to the Grafana
+host. To use another stack, change the current context before you start pibox.
 
 **Kubernetes.** pibox starts one `kubectl proxy` per context of your
 kubeconfig, on a random port on `127.0.0.1`. The sandbox gets a kubeconfig

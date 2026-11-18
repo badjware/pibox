@@ -19,7 +19,7 @@ Outbound network access is limited to the hosts allowed by the sandbox policy, f
 ## Credentials
 Credentials for AWS and Grafana (`gcx`) are not stored in the sandbox. Their environment variables and config files hold placeholders that the sandbox proxy replaces with the real values on the way out. Use the tools normally, and do not print, copy, or compare these values.
 - **AWS**: `aws` and boto3 work with the host's AWS profile. Only that one profile is available; setting `AWS_PROFILE` does not change the identity.
-- **Grafana**: `gcx` works with the host's stacks and contexts. Only `gcx` can reach the Grafana hosts.
+- **Grafana**: `gcx` works with the host's current context and its stack. Other contexts are not available. Only `gcx` can reach the Grafana hosts.
 - **Kubernetes**: `kubectl` works with the host's contexts through a proxy on the host, set by `KUBECONFIG`. `kubectl port-forward` does not work.
 
 ## Docker

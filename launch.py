@@ -419,6 +419,8 @@ def upsert_profile(profile):
 def upsert_provider(name, profile_id, credentials):
     """Create an OpenShell provider, or replace its credentials if it exists.
 
+    A provider of another type is deleted and created again.
+
     The values go through the environment of the openshell CLI so that they
     do not appear in its arguments.
 
@@ -427,7 +429,12 @@ def upsert_provider(name, profile_id, credentials):
         profile_id: provider profile (type) of the provider.
         credentials: dict of credential environment key to value.
     """
-    exists = subprocess.run(["openshell", "provider", "get", name], capture_output=True).returncode == 0
+    current = subprocess.run(["openshell", "provider", "get", name], capture_output=True, text=True)
+    exists = current.returncode == 0
+    if exists and not re.search(rf"^\s*Type:\s*{re.escape(profile_id)}\s*$", current.stdout, re.M):
+        # the type of a provider cannot be updated
+        run(["openshell", "provider", "delete", name], stdout=subprocess.DEVNULL)
+        exists = False
     cmd = ["openshell", "provider", "update", name] if exists else \
         ["openshell", "provider", "create", "--name", name, "--type", profile_id]
     for key in credentials:
@@ -438,8 +445,10 @@ def upsert_provider(name, profile_id, credentials):
 def setup_aws(image):
     """Expose the host AWS profile to the sandbox through SigV4 signing.
 
-    The profile named by the host AWS_PROFILE (default: "default") is read
-    from ~/.aws/credentials and stored in a provider. The sandbox only gets
+    Every profile in ~/.aws/credentials is stored in its own provider, but
+    only the profile named by the host AWS_PROFILE (default: "default") is
+    used by the sandbox. OpenShell signs with fixed AWS_* keys, so a sandbox
+    cannot hold more than one AWS provider. The sandbox only gets
     placeholders; the OpenShell proxy re-signs every AWS request with the real
     credentials, so the IAM policy of the profile controls access.
 
@@ -453,13 +462,9 @@ def setup_aws(image):
     profile = os.environ.get("AWS_PROFILE") or "default"
     config = configparser.RawConfigParser()
     config.read(HOME / ".aws" / "credentials")
-    if not config.has_option(profile, "aws_access_key_id"):
+    sections = [s for s in config.sections() if config.has_option(s, "aws_access_key_id")]
+    if not sections:
         return None
-    section = config[profile]
-    credentials = {"AWS_ACCESS_KEY_ID": section["aws_access_key_id"],
-                   "AWS_SECRET_ACCESS_KEY": section["aws_secret_access_key"]}
-    if section.get("aws_session_token"):
-        credentials["AWS_SESSION_TOKEN"] = section["aws_session_token"]
 
     upsert_profile({
         "id": "pibox-aws",
@@ -472,8 +477,16 @@ def setup_aws(image):
             {"name": "session_token", "env_vars": ["AWS_SESSION_TOKEN"], "required": False},
         ],
     })
-    name = "pibox-aws-" + re.sub(r"[^a-z0-9-]", "-", profile.lower())
-    upsert_provider(name, "pibox-aws", credentials)
+    names = {s: "pibox-aws-" + re.sub(r"[^a-z0-9-]", "-", s.lower()) for s in sections}
+    for section, name in names.items():
+        credentials = {"AWS_ACCESS_KEY_ID": config[section]["aws_access_key_id"],
+                       "AWS_SECRET_ACCESS_KEY": config[section]["aws_secret_access_key"]}
+        if config[section].get("aws_session_token"):
+            credentials["AWS_SESSION_TOKEN"] = config[section]["aws_session_token"]
+        upsert_provider(name, "pibox-aws", credentials)
+    if profile not in names:
+        return None
+    name = names[profile]
 
     out = run(["docker", "run", "--rm", "-i", "--entrypoint", "python3", image, "-"],
               input=AWS_ENDPOINTS_SCRIPT, capture_output=True, text=True)
@@ -484,51 +497,60 @@ def setup_aws(image):
                        **{k: v for k, v in e.items() if k != "host"}} for e in generated["endpoints"]],
         "binaries": [{"path": generated["interpreter"]}],
     }
-    return name, rule, section.get("region")
+    return name, rule, config[profile].get("region")
 
 
 def setup_gcx(template_path):
     """Expose the host gcx stacks to the sandbox through bearer token injection.
 
-    Each stack token from ~/.config/gcx/config.yaml is stored in a provider.
-    A copy of the configuration with ${GCX_TOKEN_<STACK>} in place of the
-    tokens is written to template_path; the sandbox fills it in with the
-    provider placeholders at start.
+    Each stack token from ~/.config/gcx/config.yaml is stored in its own
+    provider, but only the stack of the current context is used by the
+    sandbox. A copy of the configuration with only the current context and
+    its stack, and ${GCX_TOKEN} in place of the token, is written to
+    template_path; the sandbox fills it in with the provider placeholder at
+    start.
 
     Returns:
-        The provider name, or None when there is no gcx configuration.
+        A tuple (provider name, network policy rule), or None when the
+        current context has no stack with a token.
     """
     try:
         config = yaml.safe_load((HOME / ".config" / "gcx" / "config.yaml").read_text())
     except FileNotFoundError:
         return None
-    credentials, hosts = {}, {}
-    for stack, entry in (config.get("stacks") or {}).items():
-        grafana = (entry or {}).get("grafana") or {}
-        if not grafana.get("token") or not grafana.get("server"):
-            continue
-        key = "GCX_TOKEN_" + re.sub(r"[^A-Z0-9]", "_", stack.upper())
-        credentials[key] = grafana["token"]
-        grafana["token"] = f"${{{key}}}"
-        url = urlsplit(grafana["server"])
-        hosts[url.hostname] = url.port or 443
-    if not credentials:
+    stacks = {stack: entry["grafana"] for stack, entry in (config.get("stacks") or {}).items()
+              if ((entry or {}).get("grafana") or {}).get("token") and entry["grafana"].get("server")}
+    if not stacks:
         return None
 
     upsert_profile({
         "id": "pibox-gcx",
         "display_name": "pibox gcx",
-        "description": "Grafana tokens from the host gcx configuration",
+        "description": "Grafana token of a gcx stack from the host gcx configuration",
         "category": "other",
-        "credentials": [{"name": key.lower(), "env_vars": [key], "required": True,
-                         "auth_style": "bearer", "header_name": "authorization"} for key in credentials],
-        "endpoints": [{"host": host, "port": port, "protocol": "rest", "access": "full"}
-                      for host, port in hosts.items()],
-        "binaries": ["/usr/local/bin/gcx"],
+        "credentials": [{"name": "token", "env_vars": ["GCX_TOKEN"], "required": True,
+                         "auth_style": "bearer", "header_name": "authorization"}],
     })
-    upsert_provider("pibox-gcx", "pibox-gcx", credentials)
+    names = {s: "pibox-gcx-" + re.sub(r"[^a-z0-9-]", "-", s.lower()) for s in stacks}
+    for stack, name in names.items():
+        upsert_provider(name, "pibox-gcx", {"GCX_TOKEN": stacks[stack]["token"]})
+
+    context_name = config.get("current-context")
+    context = (config.get("contexts") or {}).get(context_name) or {}
+    stack = context.get("stack")
+    if stack not in names:
+        return None
+    stacks[stack]["token"] = "${GCX_TOKEN}"
+    config["contexts"] = {context_name: context}
+    config["stacks"] = {stack: config["stacks"][stack]}
     Path(template_path).write_text(yaml.safe_dump(config, sort_keys=False))
-    return "pibox-gcx"
+    url = urlsplit(stacks[stack]["server"])
+    rule = {
+        "endpoints": [{"host": url.hostname, "port": url.port or 443, "protocol": "rest", "access": "full",
+                       "credential_binding": {"provider": names[stack]}}],
+        "binaries": [{"path": "/usr/local/bin/gcx"}],
+    }
+    return names[stack], rule
 
 
 def setup_kube(work_dir):
@@ -685,7 +707,7 @@ def main():
         gcx_template = Path(tmp.name) / "gcx-config.yaml"
         gcx = setup_gcx(gcx_template)
         if gcx:
-            providers.append(gcx)
+            providers.append(gcx[0])
         kube = setup_kube(tmp.name)
 
         # Resolve the final mount list.
@@ -755,6 +777,7 @@ def main():
         policy = merge_policies([
             yaml.safe_load(DEFAULT_POLICY),
             {"network_policies": {"pibox-aws": aws[1]}} if aws else {},
+            {"network_policies": {"pibox-gcx": gcx[1]}} if gcx else {},
             {"network_policies": {"pibox-kube": kube[1]}} if kube else {},
             *user_policies,
             {"filesystem_policy": fs_policy,
