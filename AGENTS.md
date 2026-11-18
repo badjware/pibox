@@ -63,7 +63,7 @@ Gateway quirks that shape `launch.py`:
 
 ## Network policy
 
-`DEFAULT_POLICY` is the default policy: Landlock `hard_requirement`, the system paths, and the user's model endpoints. `launch.py` merges, in order: the default policy, the generated AWS, gcx, and kube rules, each `--policy` file, then the generated filesystem paths and process identity (`merge_policies`: network rules replaced by name, filesystem lists concatenated, everything else deep-merged). A `--policy` file with a `process` section is rejected.
+`DEFAULT_POLICY` is the default policy: Landlock `hard_requirement`, the system paths, and the user's model endpoints. `launch.py` merges, in order: the default policy, the generated AWS, gcx, and kube rules, the global policy `~/.config/pibox/policy.yaml` (`GLOBAL_POLICY`, only when it exists), each `--policy` file, then the generated filesystem paths and process identity (`merge_policies`: network rules replaced by name, filesystem lists concatenated, everything else deep-merged). A global or `--policy` file with a `process` section is rejected.
 
 OpenShell takes one base policy per sandbox and never writes back to it. Rules added at runtime (`openshell policy update`, advisor approvals) die with the sandbox.
 
@@ -101,7 +101,7 @@ Provider profiles and providers stay in the gateway between sessions; each launc
 | `--env` | `-e` | set an environment variable (repeatable; Docker `-e` syntax; `VAR` alone copies the host value; overrides variables set by pibox) |
 | `--extra-package` | `-P` | install an extra pacman or AUR package in the per-user image (repeatable) |
 | `--port` | `-p` | forward a sandbox port to the same host port (repeatable; `[IP:]PORT`, or Docker `-p` syntax with equal ports) |
-| `--policy` | | merge an OpenShell policy file into the default policy (repeatable) |
+| `--policy` | | merge an OpenShell policy file into the default policy, after `~/.config/pibox/policy.yaml` (repeatable) |
 | `--` | | remaining args forwarded to the agent inside the sandbox |
 
 Unsafe options (`--unsafe-*`) intentionally have no short form to reduce the risk of accidental use.

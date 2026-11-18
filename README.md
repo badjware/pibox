@@ -93,7 +93,7 @@ The directory you run pibox from becomes the working directory of the agent.
 | `--env <var>[=<value>]`        | `-e`  | Set an environment variable. Repeatable, `docker run -e` syntax.                                                    |
 | `--extra-package <name>`       | `-P`  | Install an extra pacman or AUR package in the per-user image. Repeatable.                                           |
 | `--port <spec>`                | `-p`  | Forward a sandbox port to the same port on the host. Repeatable, `[IP:]PORT`.                                       |
-| `--policy <file>`              |       | Merge an OpenShell policy file into the default policy. Repeatable.                                                 |
+| `--policy <file>`              |       | Merge an OpenShell policy file into the default policy, after `~/.config/pibox/policy.yaml`. Repeatable.            |
 | `--unsafe-enable-docker`       |       | Start a rootless Docker daemon in a privileged container next to the sandbox, and let the agent use it.             |
 | `--unsafe-host-wayland`        |       | Mount the Wayland socket into the sandbox and forward the Wayland environment variables.                            |
 
@@ -167,10 +167,14 @@ pibox --policy github.yaml
 A rule lists the hosts and the programs that can reach them. It also applies to
 the processes that a listed program starts, so `/usr/bin/node` covers the tools
 that pi runs. pibox merges each `--policy` file into the default policy. A rule
-with the same name replaces the default rule, and filesystem paths add to the
+with the same name replaces the earlier rule, and filesystem paths add to the
 default lists. A `process` section is not allowed. See the
 [OpenShell policy reference](https://docs.nvidia.com/openshell/how-it-works/policies/schema)
 for the format.
+
+To use a policy in every session, put it in `~/.config/pibox/policy.yaml`.
+pibox merges this file, when it exists, before the `--policy` files, so a
+`--policy` rule with the same name replaces its rule.
 
 Rules that you approve while the sandbox runs, for example with
 `openshell policy update`, disappear with the sandbox. Put the rules you keep

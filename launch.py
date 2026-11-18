@@ -43,6 +43,8 @@ HARNESS_COMMANDS = {
     "pi-web": ["pi-web"],
 }
 PI_WEB_PORT = "30141"
+# Policy merged before the --policy files when it exists.
+GLOBAL_POLICY = HOME / ".config" / "pibox" / "policy.yaml"
 # Socket directory of the --unsafe-enable-docker sidecar, at the same path in
 # the sidecar and the sandbox. It must be outside /run, which rootlesskit
 # copies up into its own mount namespace.
@@ -162,7 +164,7 @@ def merge_policies(policies):
 
 
 def load_user_policy(path):
-    """Load a --policy file.
+    """Load a --policy file or the global policy file.
 
     The process section is rejected because the workload identity must match
     the per-user image.
@@ -173,11 +175,11 @@ def load_user_policy(path):
     try:
         policy = yaml.safe_load(Path(path).read_text()) or {}
     except (OSError, yaml.YAMLError) as e:
-        die(f"--policy {path}: {e}")
+        die(f"{path}: {e}")
     if not isinstance(policy, dict):
-        die(f"--policy {path}: not a YAML mapping")
+        die(f"{path}: not a YAML mapping")
     if "process" in policy:
-        die(f"--policy {path}: the process section is set by pibox")
+        die(f"{path}: the process section is set by pibox")
     return policy
 
 
@@ -645,7 +647,7 @@ def main():
     # parse everything before prompting or starting anything
     user_mounts = [parse_volume(v) for v in opts.volume] + [parse_mount(m) for m in opts.mount]
     user_env = dict(parse_env(e) for e in opts.env)
-    user_policies = [load_user_policy(p) for p in opts.policy]
+    user_policies = [load_user_policy(p) for p in ([GLOBAL_POLICY] if GLOBAL_POLICY.is_file() else []) + opts.policy]
     ports = [parse_port(p) for p in opts.port]
 
     skip = opts.sac_moe_patience
@@ -969,9 +971,10 @@ USER ${HOST_UID}:${HOST_GID}
 # Default sandbox policy, merged by main() with the generated parts and the --policy files.
 DEFAULT_POLICY = r'''# Default OpenShell sandbox policy for pibox.
 #
-# launch.py merges this policy with the generated mount paths and process
-# identity, then with each --policy file. Network access is limited to the
-# model providers; add other hosts with --policy.
+# launch.py merges this policy with the generated credential rules, then with
+# ~/.config/pibox/policy.yaml and each --policy file, then with the generated
+# mount paths and process identity. Network access is limited to the model
+# providers; add other hosts with ~/.config/pibox/policy.yaml or --policy.
 #
 # A rule also applies to the processes that a listed binary starts, so listing
 # the harness binaries (node for pi, the native claude binary) covers the tools
