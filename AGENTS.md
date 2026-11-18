@@ -6,7 +6,7 @@ pibox runs AI coding agents (pi and Claude Code) in an [OpenShell](https://githu
 `launch.py` builds a per-user image, generates a mount list, and runs `openshell sandbox create --no-keep` with the agent as the trailing command.
 The working directory is mounted at the same path, and the workload runs as the host UID/GID so files keep their ownership.
 
-Only the Docker driver is supported. Podman is deferred (see TODO).
+Only the Docker driver is supported.
 
 ## Repository layout
 
@@ -180,7 +180,5 @@ The host's `~/.pi/agent/extensions` directory is mounted read-only into the sand
 
 1. Move Wayland to `waypipe` over SSH (`openshell ssh-proxy`) instead of mounting the socket.
 2. Split `~/.pi` and `~/.claude` into copied configuration, read-write state directories only, and providers for secrets. Today a sandboxed agent can change code and instructions that the host pi loads (`npm/`, `packages/`, `git/`, `settings.json`, `skills/`, `AGENTS.md`).
-3. Install fonts in the base image and remove the font mounts.
-4. Support the Podman driver (needs subordinate UID/GID ranges for the host user).
-5. Before deleting the sandbox, print the network rules added during the session so the user can copy them into the policy file.
-6. Serve `kubectl proxy` over a Unix socket mounted into the sandbox (with a TCP forwarder inside) instead of loopback ports that any local process can use.
+3. Before deleting the sandbox, print the network rules added during the session so the user can copy them into the policy file.
+4. Serve `kubectl proxy` over a Unix socket mounted into the sandbox (with a TCP forwarder inside) instead of loopback ports that any local process can use.

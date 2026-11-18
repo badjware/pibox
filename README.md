@@ -271,9 +271,6 @@ The image does not have `sudo`, `ssh`, `scp`, or `wget`.
 | `~/.claude.json` (claude)    | `~/.claude.json`             | rw                         |
 | `~/.gitconfig`               | `~/.gitconfig`               | ro                         |
 | `pibox-cache` volume         | `~/.cache`                   | rw                         |
-| `/etc/fonts`                 | `/etc/fonts`                 | ro                         |
-| `/usr/share/fonts`           | `/usr/share/fonts`           | ro                         |
-| `/var/cache/fontconfig`      | `/var/cache/fontconfig`      | ro                         |
 
 Host mounts that appear under the working directory after launch also appear
 in the sandbox.

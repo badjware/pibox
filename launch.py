@@ -683,9 +683,6 @@ def main():
             mounts[HOME / ".claude.json"] = mount("bind", HOME / ".claude.json")
         if (HOME / ".gitconfig").is_file():
             mounts[HOME / ".gitconfig"] = mount("bind", HOME / ".gitconfig", read_only=True)
-        for path in map(Path, ["/etc/fonts", "/usr/share/fonts", "/var/cache/fontconfig"]):
-            if path.is_dir():
-                mounts[path] = mount("bind", path, read_only=True)
         if kube:
             mounts[Path(KUBECONFIG_PATH)] = mount("bind", kube[0], read_only=True)
         if opts.unsafe_host_wayland:
