@@ -195,8 +195,8 @@ AWS_PROFILE=my-profile pibox
 
 **Grafana (gcx).** pibox stores each stack token from
 `~/.config/gcx/config.yaml` in its own provider. The sandbox gets only the
-current context (`current-context`) and its stack, with a placeholder for the
-token. The proxy adds the real token to each request from `gcx` to the Grafana
+stack of the current context (`current-context`), through the `GRAFANA_SERVER`
+and `GRAFANA_TOKEN` environment variables. The token is a placeholder. The proxy adds the real token to each request from `gcx` to the Grafana
 host. To use another stack, change the current context before you start pibox.
 
 **Kubernetes.** pibox starts one `kubectl proxy` per context of your

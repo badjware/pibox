@@ -47,10 +47,6 @@ PI_WEB_PORT = "30141"
 # the sidecar and the sandbox. It must be outside /run, which rootlesskit
 # copies up into its own mount namespace.
 DOCKER_RUN_DIR = "/pibox-docker"
-# Read-only template of the gcx configuration, filled in at sandbox start.
-GCX_TEMPLATE = "/etc/pibox/gcx-config.yaml"
-# Filled-in gcx configuration. Not under $HOME, which is read-only when it is the workdir.
-GCX_CONFIG = "/tmp/pibox-gcx-config.yaml"
 # Generated kubeconfig that points at the host kubectl proxies.
 KUBECONFIG_PATH = "/etc/pibox/kubeconfig"
 
@@ -419,7 +415,8 @@ def upsert_profile(profile):
 def upsert_provider(name, profile_id, credentials):
     """Create an OpenShell provider, or replace its credentials if it exists.
 
-    A provider of another type is deleted and created again.
+    A provider of another type or with other credential keys is deleted and
+    created again.
 
     The values go through the environment of the openshell CLI so that they
     do not appear in its arguments.
@@ -431,8 +428,10 @@ def upsert_provider(name, profile_id, credentials):
     """
     current = subprocess.run(["openshell", "provider", "get", name], capture_output=True, text=True)
     exists = current.returncode == 0
-    if exists and not re.search(rf"^\s*Type:\s*{re.escape(profile_id)}\s*$", current.stdout, re.M):
-        # the type of a provider cannot be updated
+    keys = ", ".join(sorted(credentials))
+    if exists and not (re.search(rf"^\s*Type:\s*{re.escape(profile_id)}\s*$", current.stdout, re.M)
+                       and re.search(rf"^\s*Credential keys:\s*{re.escape(keys)}\s*$", current.stdout, re.M)):
+        # the type and the credential keys of a provider cannot be updated
         run(["openshell", "provider", "delete", name], stdout=subprocess.DEVNULL)
         exists = False
     cmd = ["openshell", "provider", "update", name] if exists else \
@@ -500,19 +499,18 @@ def setup_aws(image):
     return name, rule, config[profile].get("region")
 
 
-def setup_gcx(template_path):
+def setup_gcx():
     """Expose the host gcx stacks to the sandbox through bearer token injection.
 
     Each stack token from ~/.config/gcx/config.yaml is stored in its own
     provider, but only the stack of the current context is used by the
-    sandbox. A copy of the configuration with only the current context and
-    its stack, and ${GCX_TOKEN} in place of the token, is written to
-    template_path; the sandbox fills it in with the provider placeholder at
-    start.
+    sandbox. The provider sets GRAFANA_TOKEN to a placeholder, and the
+    returned GRAFANA_* variables select the server of the stack.
 
     Returns:
-        A tuple (provider name, network policy rule), or None when the
-        current context has no stack with a token.
+        A tuple (provider name, network policy rule, dict of GRAFANA_*
+        environment variables), or None when the current context has no
+        stack with a token.
     """
     try:
         config = yaml.safe_load((HOME / ".config" / "gcx" / "config.yaml").read_text())
@@ -528,29 +526,29 @@ def setup_gcx(template_path):
         "display_name": "pibox gcx",
         "description": "Grafana token of a gcx stack from the host gcx configuration",
         "category": "other",
-        "credentials": [{"name": "token", "env_vars": ["GCX_TOKEN"], "required": True,
+        "credentials": [{"name": "token", "env_vars": ["GRAFANA_TOKEN"], "required": True,
                          "auth_style": "bearer", "header_name": "authorization"}],
     })
     names = {s: "pibox-gcx-" + re.sub(r"[^a-z0-9-]", "-", s.lower()) for s in stacks}
     for stack, name in names.items():
-        upsert_provider(name, "pibox-gcx", {"GCX_TOKEN": stacks[stack]["token"]})
+        upsert_provider(name, "pibox-gcx", {"GRAFANA_TOKEN": stacks[stack]["token"]})
 
-    context_name = config.get("current-context")
-    context = (config.get("contexts") or {}).get(context_name) or {}
+    context = (config.get("contexts") or {}).get(config.get("current-context")) or {}
     stack = context.get("stack")
     if stack not in names:
         return None
-    stacks[stack]["token"] = "${GCX_TOKEN}"
-    config["contexts"] = {context_name: context}
-    config["stacks"] = {stack: config["stacks"][stack]}
-    Path(template_path).write_text(yaml.safe_dump(config, sort_keys=False))
-    url = urlsplit(stacks[stack]["server"])
+    grafana = stacks[stack]
+    env = {"GRAFANA_SERVER": grafana["server"]}
+    for key in ["org-id", "stack-id"]:
+        if grafana.get(key):
+            env["GRAFANA_" + key.upper().replace("-", "_")] = str(grafana[key])
+    url = urlsplit(grafana["server"])
     rule = {
         "endpoints": [{"host": url.hostname, "port": url.port or 443, "protocol": "rest", "access": "full",
                        "credential_binding": {"provider": names[stack]}}],
         "binaries": [{"path": "/usr/local/bin/gcx"}],
     }
-    return names[stack], rule
+    return names[stack], rule, env
 
 
 def setup_kube(work_dir):
@@ -704,8 +702,7 @@ def main():
         aws = setup_aws(user_image)
         if aws:
             providers.append(aws[0])
-        gcx_template = Path(tmp.name) / "gcx-config.yaml"
-        gcx = setup_gcx(gcx_template)
+        gcx = setup_gcx()
         if gcx:
             providers.append(gcx[0])
         kube = setup_kube(tmp.name)
@@ -729,8 +726,6 @@ def main():
                 mounts[path] = mount("bind", path, read_only=True)
         if kube:
             mounts[Path(KUBECONFIG_PATH)] = mount("bind", kube[0], read_only=True)
-        if gcx:
-            mounts[Path(GCX_TEMPLATE)] = mount("bind", gcx_template, read_only=True)
         if opts.unsafe_host_wayland:
             mounts[wayland_socket] = mount("bind", wayland_socket)
         if opts.unsafe_enable_docker:
@@ -805,7 +800,7 @@ def main():
         if kube:
             env["KUBECONFIG"] = KUBECONFIG_PATH
         if gcx:
-            env["GCX_CONFIG"] = GCX_CONFIG
+            env.update(gcx[2])
         if aws:
             env["AWS_DEFAULT_REGION"] = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or aws[2]
         if opts.harness == "pi-web":
@@ -821,11 +816,6 @@ def main():
         # Without a TTY, openshell never forwards EOF on stdin, so an agent
         # that reads stdin (pi -p) would wait forever.
         script = 'cd -- "$1" && shift && exec "$@"' + ("" if tty else " </dev/null")
-        if gcx:
-            # the provider placeholders only exist in the sandbox environment
-            script = ('python3 -c "import os, sys; '
-                      'sys.stdout.write(os.path.expandvars(open(sys.argv[1]).read()))" '
-                      f'{GCX_TEMPLATE} > {GCX_CONFIG} && ' + script)
         cmd = [
             "openshell", "sandbox", "create",
             "--name", sandbox_name,
