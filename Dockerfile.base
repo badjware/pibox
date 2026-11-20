@@ -1,19 +1,3 @@
-# Build AUR packages in a throwaway stage (makepkg refuses to run as root).
-FROM archlinux:latest AS aur
-RUN pacman -Syu --noconfirm --needed base-devel git \
-    && useradd -m builder \
-    && echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
-
-USER builder
-WORKDIR /home/builder
-
-RUN for pkg in tini docker-rootless-extras; do \
-        git clone https://aur.archlinux.org/$pkg.git \
-        && ( cd $pkg && PKGEXT=.pkg.tar.zst makepkg -s --noconfirm ); \
-    done \
-    && mkdir /tmp/pkgs \
-    && cp $(find . -name '*.pkg.tar.zst' | grep -v debug) /tmp/pkgs/
-
 FROM archlinux:latest
 
 ARG PLAYWRIGHT_VERSION=1.64.1
@@ -26,12 +10,8 @@ RUN pacman -Syu --noconfirm --needed \
         ncurses \
         ca-certificates curl \
         docker docker-compose docker-buildx \
-        fuse-overlayfs slirp4netns rootlesskit iproute2 containerd iptables \
+        iproute2 containerd iptables \
         kubectl aws-cli-v2
-
-# built in the aur stage above
-COPY --from=aur /tmp/pkgs /tmp/pkgs
-RUN pacman -U --noconfirm /tmp/pkgs/*.pkg.tar.zst && rm -rf /tmp/pkgs
 
 ENV EDITOR=vim
 ENV NODE_PATH=/usr/local/lib/node_modules:/usr/lib/node_modules
@@ -61,4 +41,5 @@ COPY common/chrome-policies/pibox.json /etc/chromium/policies/managed/pibox.json
 
 WORKDIR /
 
-ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]
+# launch.py runs the container with --init
+ENTRYPOINT ["/entrypoint.sh"]

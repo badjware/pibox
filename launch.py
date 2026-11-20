@@ -11,8 +11,10 @@ import os
 import pwd
 import re
 import shlex
+import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -36,6 +38,30 @@ CA_BUNDLES = [
     "/etc/pki/tls/certs/ca-bundle.crt",
     "/etc/ssl/cert.pem",
 ]
+# Image of the --unsafe-enable-docker sidecar.
+DIND_IMAGE = "docker:dind-rootless"
+# Socket directory of the --unsafe-enable-docker sidecar, at the same path in
+# both containers. It must be outside /run, which rootlesskit copies up into
+# its own mount namespace.
+DOCKER_RUN_DIR = "/pibox-docker"
+# Run as root in the sidecar. DIND_IMAGE only has passwd and subuid entries
+# for its own user (UID 1000), and the daemon must run as the host user so
+# that files written in the workdir belong to the host user.
+DIND_SCRIPT = r'''set -e
+grep -q "^[^:]*:[^:]*:$HOST_GID:" /etc/group || addgroup -g "$HOST_GID" "$HOST_USER"
+group=$(grep "^[^:]*:[^:]*:$HOST_GID:" /etc/group | cut -d: -f1)
+grep -q "^[^:]*:[^:]*:$HOST_UID:" /etc/passwd || adduser -D -u "$HOST_UID" -G "$group" -h "/home/$HOST_USER" "$HOST_USER"
+user=$(grep "^[^:]*:[^:]*:$HOST_UID:" /etc/passwd | cut -d: -f1)
+home=$(grep "^[^:]*:[^:]*:$HOST_UID:" /etc/passwd | cut -d: -f6)
+grep -q "^$user:" /etc/subuid || echo "$user:100000:65536" >> /etc/subuid
+grep -q "^$user:" /etc/subgid || echo "$user:100000:65536" >> /etc/subgid
+# the data directory is an anonymous volume, so it is not on overlayfs
+mkdir -p "$home/.local/share/docker"
+chown "$HOST_UID:$HOST_GID" "$home" "$home/.local" "$home/.local/share" "$home/.local/share/docker" "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+# without arguments, the image entrypoint also listens on TCP
+exec su -s /bin/sh "$user" -c "exec dockerd-entrypoint.sh dockerd --host=unix://$XDG_RUNTIME_DIR/docker.sock"
+'''
 
 
 def parse_args(argv):
@@ -73,7 +99,7 @@ def parse_args(argv):
                    help="publish a container port (repeatable; Docker -p syntax); "
                         f"pi-web listens on {PI_WEB_PORT}; default 127.0.0.1:{PI_WEB_PORT}:{PI_WEB_PORT}")
     p.add_argument("--unsafe-enable-docker", action="store_true",
-                   help="enable rootless Docker-in-Docker (privileged)")
+                   help="start a rootless Docker daemon in a privileged sidecar container")
     p.add_argument("--unsafe-enable-aws", action="store_true", help="mount ~/.aws into the container")
     p.add_argument("--unsafe-enable-kube", action="store_true", help="mount ~/.kube into the container")
     p.add_argument("--unsafe-enable-gcx", action="store_true", help="mount ~/.config/gcx into the container")
@@ -186,7 +212,8 @@ def pick_container_name(workdir):
     """Return a free container name based on the working directory name.
 
     Like the tmux sessions: "home" for $HOME, else the directory name, with
-    -2, -3, ... appended when the name is taken.
+    -2, -3, ... appended when the name or the name of its Docker sidecar
+    (NAME-docker) is taken.
 
     Args:
         workdir: resolved working directory.
@@ -195,19 +222,72 @@ def pick_container_name(workdir):
     out = subprocess.run(["docker", "ps", "-a", "--format", "{{.Names}}"], capture_output=True, text=True).stdout
     taken = set(out.split())
     name, i = base, 2
-    while name in taken:
+    while name in taken or f"{name}-docker" in taken:
         name, i = f"{base}-{i}", i + 1
     return name
 
 
+def start_docker_sidecar(name, workdir_volume, ca_bundle):
+    """Start a rootless dockerd in a privileged container next to the agent.
+
+    The agent reaches the daemon through its socket in the volume NAME,
+    mounted at DOCKER_RUN_DIR in both containers. The workdir is mounted at
+    the same path so that bind mounts from the agent resolve to the same
+    files.
+
+    Args:
+        name: name of the sidecar container and of the socket volume.
+        workdir_volume: Docker -v spec of the workdir in the agent container.
+        ca_bundle: host CA bundle path, or None.
+    """
+    # a volume left by a killed session would keep a stale socket
+    subprocess.run(["docker", "volume", "rm", name], capture_output=True)
+    cmd = [
+        "docker", "run", "-d", "--rm", "--privileged", "--user", "0", "--name", name,
+        "-v", workdir_volume,
+        "-v", f"{name}:{DOCKER_RUN_DIR}",
+        "-v", f"/home/{HOST_USER}/.local/share/docker",
+        "-e", f"HOST_UID={HOST_UID}",
+        "-e", f"HOST_GID={HOST_GID}",
+        "-e", f"HOST_USER={HOST_USER}",
+        "-e", f"XDG_RUNTIME_DIR={DOCKER_RUN_DIR}",
+    ]
+    if ca_bundle:
+        cmd += ["-v", f"{ca_bundle}:/etc/ssl/host-ca-bundle.pem:ro",
+                "-e", "SSL_CERT_FILE=/etc/ssl/host-ca-bundle.pem"]
+    cmd += [DIND_IMAGE, "sh", "-c", DIND_SCRIPT]
+    print(f"+ {shlex.join(cmd[:-1])} <DIND_SCRIPT>", file=sys.stderr)
+    if subprocess.run(cmd, stdout=subprocess.DEVNULL).returncode != 0:
+        die("could not start the Docker sidecar", 1)
+    for _ in range(60):
+        version = ["docker", "exec", name, "docker", "-H", f"unix://{DOCKER_RUN_DIR}/docker.sock", "version"]
+        if subprocess.run(version, capture_output=True).returncode == 0:
+            return
+        if subprocess.run(["docker", "container", "inspect", name], capture_output=True).returncode != 0:
+            break
+        time.sleep(0.5)
+    subprocess.run(["docker", "logs", "--tail", "50", name])
+    die("the rootless Docker daemon did not start", 1)
+
+
+def remove_volume(name):
+    """Remove a Docker volume, retrying while its containers shut down."""
+    for _ in range(20):
+        if subprocess.run(["docker", "volume", "rm", name], capture_output=True).returncode == 0:
+            return
+        time.sleep(0.5)
+    print(f"pibox: warning: could not remove volume {name}", file=sys.stderr)
+
+
 def main():
-    """Entry point. Replaces the process with docker run."""
+    """Entry point. Returns the exit status of the agent."""
     opts, agent_args = parse_args(sys.argv[1:])
     user_volumes = [parse_volume(v) for v in opts.volume]
 
     skip = opts.sac_moe_patience
     if opts.unsafe_enable_docker:
-        confirm("--unsafe-enable-docker enables privileged mode", skip)
+        confirm("--unsafe-enable-docker starts a privileged container, "
+                "and the containers it runs are not restricted like the agent container", skip)
     if opts.unsafe_enable_aws:
         confirm("--unsafe-enable-aws mounts ~/.aws into the container", skip)
     if opts.unsafe_enable_kube:
@@ -230,15 +310,13 @@ def main():
     workdir = Path.cwd().resolve()
     image = build_images(opts.harness, opts.build, opts.pull)
 
-    args = []
-    if opts.unsafe_enable_docker:
-        # the inner rootless dockerd needs user namespaces and fuse-overlayfs
-        args += ["--privileged", "-e", "ENABLE_DOCKER=1"]
-    else:
-        # Drop all caps and re-add only what the entrypoint needs.
-        # Also block setuid/setgid binaries from gaining new privileges.
-        args += ["--security-opt=no-new-privileges:true", "--security-opt=seccomp=unconfined", "--cap-drop=ALL"]
-        args += [f"--cap-add={cap}" for cap in ("CHOWN", "DAC_OVERRIDE", "FOWNER", "SETUID", "SETGID", "KILL")]
+    name = pick_container_name(workdir)
+    docker_sidecar = f"{name}-docker" if opts.unsafe_enable_docker else None
+
+    # Drop all caps and re-add only what the entrypoint needs.
+    # Also block setuid/setgid binaries from gaining new privileges.
+    args = ["--security-opt=no-new-privileges:true", "--security-opt=seccomp=unconfined", "--cap-drop=ALL"]
+    args += [f"--cap-add={cap}" for cap in ("CHOWN", "DAC_OVERRIDE", "FOWNER", "SETUID", "SETGID", "KILL")]
 
     if opts.unsafe_host_net:
         args += ["--network=host"]
@@ -268,6 +346,8 @@ def main():
         env["XDG_RUNTIME_DIR"] = runtime_dir
         env["WAYLAND_DISPLAY"] = os.environ["WAYLAND_DISPLAY"]
         env["XDG_SESSION_TYPE"] = "wayland"
+    if docker_sidecar:
+        env["DOCKER_HOST"] = f"unix://{DOCKER_RUN_DIR}/docker.sock"
 
     # Resolve the final volume list.
     # Priority: defaults < user-provided < workdir. A later entry for the
@@ -302,6 +382,8 @@ def main():
         add_default(HOME / ".config/gcx", f"{container_home}/.config/gcx", "ro")
     if opts.unsafe_host_wayland:
         volumes[str(wayland_socket)] = f"{wayland_socket}:{wayland_socket}:rw"
+    if docker_sidecar:
+        volumes[DOCKER_RUN_DIR] = f"{docker_sidecar}:{DOCKER_RUN_DIR}"
     for dest, spec in user_volumes:
         volumes[dest] = spec
     # When launched from $HOME, the workdir is read-only to avoid exposing the
@@ -321,21 +403,38 @@ def main():
         args += ["-it"]
 
     cmd = [
-        "docker", "run", "--rm",
-        "--name", pick_container_name(workdir),
+        "docker", "run", "--rm", "--init",
+        "--name", name,
         "-w", str(workdir),
         "--ipc=none",
         "--pids-limit=1024",
         *args,
         image, *agent_args,
     ]
-    print(f"+ {shlex.join(cmd)}", file=sys.stderr)
-    sys.stdout.flush()
-    os.execvp(cmd[0], cmd)
+    try:
+        if docker_sidecar:
+            if opts.pull:
+                run(["docker", "pull", DIND_IMAGE])
+            start_docker_sidecar(docker_sidecar, volumes[str(workdir)], ca_bundle)
+        print(f"+ {shlex.join(cmd)}", file=sys.stderr)
+        return subprocess.run(cmd).returncode
+    finally:
+        # --rm cannot clean up when the docker CLI itself is killed
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+        if docker_sidecar:
+            subprocess.run(["docker", "rm", "-f", docker_sidecar], capture_output=True)
+            remove_volume(docker_sidecar)
+
+
+def exit_on_signal(signum, _frame):
+    """Turn a termination signal into SystemExit so cleanup still runs."""
+    sys.exit(128 + signum)
 
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, exit_on_signal)
+    signal.signal(signal.SIGHUP, exit_on_signal)
     try:
-        main()
+        sys.exit(main())
     except KeyboardInterrupt:
         sys.exit(130)

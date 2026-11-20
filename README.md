@@ -20,7 +20,7 @@ Three harnesses are supported:
 - **Sandboxed execution**: the agent runs inside a container that is deleted when the session ends.
 - **Host-user mirroring**: files written from inside the container are owned by your host user.
 - **Persistent config**: `~/.pi` is bind-mounted, and `~/.claude` is bind-mounted for the claude harness, so settings and sessions survive between runs.
-- **Optional rootless Docker-in-Docker**: opt in with `--unsafe-enable-docker` when the agent needs to run containers itself.
+- **Optional rootless Docker**: opt in with `--unsafe-enable-docker` when the agent needs to run containers itself. The daemon runs in a privileged sidecar container, so the agent container is never privileged.
 - **Pre-built images**: distributed via GitHub Container Registry.
 
 ## Requirements
@@ -62,7 +62,7 @@ alias claudebox='/path/to/pibox/launch.py --harness claude'
 | `--harness pi\|claude\|pi-web`          | `-H`  | Choose the agent to run. Defaults to `pi`.                                                                                    |
 | `--build`                               |       | Build the image locally from the Dockerfiles instead of using the published image.                                            |
 | `--pull`                                |       | Update the image prior to launching.                                                                                          |
-| `--unsafe-enable-docker`                |       | Start a rootless Docker daemon in DinD mode inside the container so the agent can run containers.                             |
+| `--unsafe-enable-docker`                |       | Start a rootless Docker daemon in a privileged sidecar container so the agent can run containers.                             |
 | `--unsafe-enable-aws`                   |       | Mount `~/.aws` into the container.                                                                                            |
 | `--unsafe-enable-kube`                  |       | Mount `~/.kube` into the container.                                                                                           |
 | `--unsafe-enable-gcx`                   |       | Mount `~/.config/gcx` into the container.                                                                                     |

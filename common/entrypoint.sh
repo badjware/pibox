@@ -4,7 +4,6 @@ set -e
 HOST_UID="${HOST_UID:?HOST_UID environment variable is required}"
 HOST_GID="${HOST_GID:?HOST_GID environment variable is required}"
 HOST_USER="${HOST_USER:?HOST_USER environment variable is required}"
-ENABLE_DOCKER="${ENABLE_DOCKER:-0}"
 HARNESS="${HARNESS:-pi}"
 
 # ---------------------------------------------------------------------------
@@ -31,66 +30,6 @@ done
 export BILI_CONFIG_FILE="${BILI_CONFIG_FILE:-$USER_HOME/.pi/agent/billion-context/billion-context.json}"
 export BILI_SESSIONS_DIR="${BILI_SESSIONS_DIR:-$USER_HOME/.pi/agent/billion-context/sessions}"
 export ACP_LOG_FILE="${ACP_LOG_FILE:-$USER_HOME/.pi/agent/billion-context/bili.log}"
-
-# ---------------------------------------------------------------------------
-# Optional: rootless Docker-in-Docker
-#
-# rootlesskit provides the user-namespace wrapper; slirp4netns handles
-# networking; fuse-overlayfs is the storage driver (no kernel overlay needed).
-# We export DOCKER_HOST / XDG_RUNTIME_DIR so the exec'd pi inherits them.
-# ---------------------------------------------------------------------------
-start_rootless_docker() {
-    # Subordinate UID/GID mappings are required by newuidmap / newgidmap.
-    echo "$HOST_USER:100000:65536" >> /etc/subuid
-    echo "$HOST_USER:100000:65536" >> /etc/subgid
-
-    # newuidmap / newgidmap need cap_setuid / cap_setgid to write the maps.
-    # The file capabilities set by the shadow package can be lost during image
-    # layer export, so we reassert them here before starting the daemon.
-    setcap cap_setuid+ep /usr/bin/newuidmap
-    setcap cap_setgid+ep /usr/bin/newgidmap
-
-    # XDG_RUNTIME_DIR holds the docker socket. The bind-mounted socket file
-    # lives here, so it survives rootlesskit's --copy-up=/run overlay and
-    # remains reachable from the outer container at the same path.
-    local runtime_dir="/run/user/$HOST_UID"
-    mkdir -p "$runtime_dir"
-    chown "$HOST_UID:$HOST_GID" "$runtime_dir"
-    chmod 700 "$runtime_dir"
-
-    local sock="$runtime_dir/docker.sock"
-    local log=/tmp/dockerd-rootless.log
-
-    runuser -u "$HOST_USER" -- \
-        env \
-            HOME="$USER_HOME" \
-            PATH="/usr/sbin:/usr/local/bin:/usr/bin:/bin" \
-            XDG_RUNTIME_DIR="$runtime_dir" \
-            XDG_DATA_HOME="$USER_HOME/.local/share" \
-            ${SSL_CERT_FILE:+SSL_CERT_FILE="$SSL_CERT_FILE"} \
-        dockerd-rootless.sh \
-            --host="unix://$sock" \
-            --storage-driver=fuse-overlayfs \
-        </dev/null >>"$log" 2>&1 &
-    local pid=$!
-
-    echo "Starting rootless Docker daemon (pid=$pid)..." >&2
-    sleep 3
-    if ! kill -0 "$pid" 2>/dev/null; then
-        echo "ERROR: rootless dockerd died during startup. Log:" >&2
-        cat "$log" >&2
-    elif ! [[ -S "$sock" ]] || ! DOCKER_HOST="unix://$sock" docker version >/dev/null 2>&1; then
-        echo "ERROR: rootless dockerd is not responsive. Log:" >&2
-        tail -50 "$log" >&2
-    else
-        echo "Rootless Docker daemon is ready (socket: $sock)." >&2
-    fi
-
-    export DOCKER_HOST="unix://$sock"
-    export XDG_RUNTIME_DIR="$runtime_dir"
-}
-
-[[ "$ENABLE_DOCKER" == "1" ]] && start_rootless_docker
 
 # ---------------------------------------------------------------------------
 # Optional: install extra packages requested via --extra-package.

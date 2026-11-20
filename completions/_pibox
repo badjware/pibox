@@ -11,7 +11,7 @@ _pibox() {
         '*--env[set an environment variable in the container]:variable:_parameters -g "*export*"' \
         '*--extra-package[install an extra pacman or AUR package at startup]:package:' \
         '*--port[publish a container port (Docker -p syntax)]:port:' \
-        '--unsafe-enable-docker[enable rootless Docker-in-Docker (privileged)]' \
+        '--unsafe-enable-docker[start a rootless Docker daemon in a privileged sidecar container]' \
         '--unsafe-enable-aws[mount ~/.aws into the container]' \
         '--unsafe-enable-kube[mount ~/.kube into the container]' \
         '--unsafe-enable-gcx[mount ~/.config/gcx into the container]' \

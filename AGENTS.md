@@ -31,7 +31,7 @@ completions/_pibox                  # zsh completion
 - `launch.py` creates no file or directory on the host. A default mount whose host path does not exist is skipped, so Docker does not create it as root. This includes `~/.pi`, `~/.claude`, `~/.claude.json`, `~/.gitconfig`, and the `--unsafe-enable-aws/kube/gcx` directories.
 - When launched from `$HOME`, the workdir is read-only unless a `--volume` for `$HOME` is given.
 - `--read-only` applies to the workdir only.
-- The container is named after the workdir, like the user's tmux sessions: `home` for `$HOME`, else the directory name lowercased with characters outside `[a-z0-9-]` replaced by `-`, then `-2`, `-3`, ... when `docker ps -a` already has the name.
+- The container is named after the workdir, like the user's tmux sessions: `home` for `$HOME`, else the directory name lowercased with characters outside `[a-z0-9-]` replaced by `-`, then `-2`, `-3`, ... when `docker ps -a` already has the name or its sidecar name (`<name>-docker`).
 
 ## launch.py flags
 
@@ -41,7 +41,7 @@ completions/_pibox                  # zsh completion
 | `--harness pi\|claude\|pi-web` | `-H` | agent to run (default: `pi`) |
 | `--build` | | build images locally instead of pulling |
 | `--pull` | | pull latest image before launch |
-| `--unsafe-enable-docker` | (none, intentional) | enable rootless Docker-in-Docker (privileged) |
+| `--unsafe-enable-docker` | (none, intentional) | start a rootless dockerd in a privileged sidecar container and share its socket |
 | `--unsafe-enable-aws` | (none, intentional) | mount `~/.aws` into the container (awscli is pre-installed) |
 | `--unsafe-enable-kube` | (none, intentional) | mount `~/.kube` into the container (kubectl is pre-installed) |
 | `--unsafe-enable-gcx` | (none, intentional) | mount `~/.config/gcx` into the container (gcx is pre-installed) |
@@ -55,6 +55,12 @@ completions/_pibox                  # zsh completion
 | `--` | | remaining args forwarded to the agent inside the container |
 
 Unsafe options (`--unsafe-*`) intentionally have no short form to reduce the risk of accidental use.
+
+### `--unsafe-enable-docker`
+
+The agent container never runs privileged. `launch.py` starts a privileged sidecar `<container name>-docker` from the official `docker:dind-rootless` image (`DIND_IMAGE`; `--pull` also pulls it). The sidecar starts as root and runs `DIND_SCRIPT`, embedded in `launch.py`: the image only has `/etc/passwd` and `/etc/subuid` entries for its own user (UID 1000), so the script adds the host user and its subordinate ranges, then runs the image entrypoint `dockerd-entrypoint.sh` as the host user. The daemon must run as the host UID so that files that containers write in the workdir belong to the host user. The script passes an explicit `dockerd --host=unix://...`, because without arguments the image entrypoint also listens on TCP. The daemon data is an anonymous volume, so it is not on overlayfs, and `--rm` removes it. A rootful `docker:dind` is not an option: the agent could start a `--privileged` container and get root on the host. The sidecar mounts the workdir with the same `-v` spec as the agent container. The socket lives in the named volume `<container name>-docker`, mounted at `/pibox-docker` in both containers (outside `/run`, because `rootlesskit` copies `/run` up into its own namespace), and the agent gets `DOCKER_HOST`. Paths other than the workdir, such as `~/.pi` or `/tmp`, resolve in the sidecar, so a bind mount of them from the agent gets the sidecar's files. Containers started by the sidecar are not restricted like the agent container.
+
+The agent container runs with `--init` (Docker's bundled `tini`); the `docker:dind-rootless` entrypoint starts its own `docker-init`. `launch.py` runs `docker run` as a child process and, on exit, removes the agent container, the sidecar, and the volume. It turns SIGTERM and SIGHUP into a normal exit so this cleanup still runs, because `--rm` cannot clean up when the docker CLI itself is killed.
 
 ### `--extra-package` and the AUR
 
