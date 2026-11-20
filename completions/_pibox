@@ -1,4 +1,4 @@
-#compdef pibox claudebox nanobox launch.sh
+#compdef pibox claudebox nanobox launch.py
 
 _pibox() {
     _arguments -S \
@@ -6,11 +6,8 @@ _pibox() {
         '--build[build images locally instead of pulling]' \
         '--pull[pull latest image before launch]' \
         '--harness[agent to run]:harness:(pi claude pi-web)' \
-        '--ephemeral[use a temp workdir]' \
-        '--workdir[use a directory as the workdir instead of the current one]:directory:_files -/' \
-        '--read-only[mount all volumes read-only]' \
+        '--read-only[mount the workdir read-only]' \
         '*--volume[bind-mount an extra volume]:volume:_files' \
-        '*--mount[add a mount (Docker --mount syntax)]:mount:' \
         '*--env[set an environment variable in the container]:variable:_parameters -g "*export*"' \
         '*--extra-package[install an extra pacman or AUR package at startup]:package:' \
         '*--port[publish a container port (Docker -p syntax)]:port:' \
@@ -19,7 +16,6 @@ _pibox() {
         '--unsafe-enable-kube[mount ~/.kube into the container]' \
         '--unsafe-enable-gcx[mount ~/.config/gcx into the container]' \
         '--unsafe-host-wayland[mount the Wayland socket into the container]' \
-        '--unsafe-host-tmux[mount the tmux socket into the container]' \
         '--unsafe-host-net[share the host network namespace]' \
         '(-)--[forward remaining args to the agent]:: :_default'
 }

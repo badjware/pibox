@@ -17,15 +17,16 @@ Three harnesses are supported:
 
 ## Features
 
-- **Sandboxed execution**: the agent runs inside a container with an ephemeral filesystem.
+- **Sandboxed execution**: the agent runs inside a container that is deleted when the session ends.
 - **Host-user mirroring**: files written from inside the container are owned by your host user.
-- **Persistent config**: `~/.pi` is always bind-mounted, and `~/.claude` is bind-mounted for the claude harness, so settings and sessions survive between runs.
+- **Persistent config**: `~/.pi` is bind-mounted, and `~/.claude` is bind-mounted for the claude harness, so settings and sessions survive between runs.
 - **Optional rootless Docker-in-Docker**: opt in with `--unsafe-enable-docker` when the agent needs to run containers itself.
 - **Pre-built images**: distributed via GitHub Container Registry.
 
 ## Requirements
 
 - Docker
+- Python 3
 
 YMMV on WSL.
 
@@ -34,23 +35,23 @@ YMMV on WSL.
 ```sh
 git clone https://github.com/badjware/pibox.git
 cd pibox
-./launch.sh
+./launch.py
 ```
 
-You can invoke `launch.sh` from any directory. The directory you run it from
+You can invoke `launch.py` from any directory. The directory you run it from
 becomes the working directory bind-mounted into the container.
 
 Set aliases in your shell for convenience:
 
 ```sh
-alias pibox='/path/to/pibox/launch.sh'
-alias claudebox='/path/to/pibox/launch.sh --harness claude'
+alias pibox='/path/to/pibox/launch.py'
+alias claudebox='/path/to/pibox/launch.py --harness claude'
 ```
 
 ## Usage
 
 ```
-./launch.sh [options] [-- <agent args>]
+./launch.py [options] [-- <agent args>]
 ```
 
 ### Flags
@@ -66,11 +67,8 @@ alias claudebox='/path/to/pibox/launch.sh --harness claude'
 | `--unsafe-enable-kube`                  |       | Mount `~/.kube` into the container.                                                                                           |
 | `--unsafe-enable-gcx`                   |       | Mount `~/.config/gcx` into the container.                                                                                     |
 | `--unsafe-host-wayland`                 |       | Mount the Wayland socket into the container and forward Wayland environment variables.                                        |
-| `--unsafe-host-tmux`                    |       | Mount the tmux socket into the container and forward the tmux environment variable.                                           |
 | `--unsafe-host-net`                     |       | Share the host network namespace.                                                                                             |
-| `--ephemeral`, `--tmp`                  |       | Start in a temporary working directory instead of the current one.                                                            |
-| `--workdir <dir>`                       | `-w`  | Use `<dir>` as the working directory instead of the current one. Incompatible with `--ephemeral`.                             |
-| `--read-only`, `--ro`                   | `-r`  | Mount all volumes as read-only inside the container.                                                                          |
+| `--read-only`, `--ro`                   | `-r`  | Mount the working directory read-only. It is always read-only from `$HOME`, unless a `--volume` for `$HOME` is given.         |
 | `--volume <spec>`                       | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                                                      |
 | `--env <var>[=<value>]`                 | `-e`  | Set an environment variable in the container (repeatable, same syntax as `docker run -e`).                                    |
 | `--extra-package <name>`                | `-P`  | Install an extra pacman or AUR package at container startup. Repeatable and non-persistent.                                   |
@@ -83,19 +81,19 @@ Any arguments after `--` are passed through to the agent inside the container.
 Launch pi (default):
 
 ```sh
-./launch.sh
+./launch.py
 ```
 
 Launch Claude Code:
 
 ```sh
-./launch.sh --harness claude
+./launch.py --harness claude
 ```
 
 Launch Pi Web and open http://127.0.0.1:30141:
 
 ```sh
-./launch.sh --harness pi-web
+./launch.py --harness pi-web
 ```
 
 By default, pi-web is published on `127.0.0.1:30141` only. Any `--port` replaces
@@ -108,13 +106,13 @@ authentication by default; only expose it on a trusted network.
 Pass arguments through to the agent (everything after `--` is forwarded):
 
 ```sh
-./launch.sh -- -p "summarize the README"
+./launch.py -- -p "summarize the README"
 ```
 
 Install extra packages at startup (repo or AUR):
 
 ```sh
-./launch.sh -P tree -P openscad-git
+./launch.py -P tree -P openscad-git
 ```
 
 Packages known to pacman are installed from the official repositories. Anything
@@ -126,13 +124,13 @@ covers packages whose dependencies all live in the official repositories.
 Force-refresh the image from GHCR:
 
 ```sh
-./launch.sh --pull
+./launch.py --pull
 ```
 
 Forward Wayland for GUI apps:
 
 ```sh
-./launch.sh --unsafe-host-wayland
+./launch.py --unsafe-host-wayland
 ```
 
 ## Shell completion
@@ -160,19 +158,16 @@ Tools deliberately **not** installed: `sudo`, `ssh`, `scp`, `wget`.
 
 ## Default bind mounts
 
-These paths are always bind-mounted.
+These paths are bind-mounted when they exist on the host. pibox does not create
+them, so Docker does not create them as root.
 
 | Host                              | Container                     | Mode |
 | --------------------------------- | ----------------------------- | ---- |
-| current working directory         | same absolute path            | rw   |
+| current working directory         | same absolute path            | rw (ro from `$HOME`) |
 | `~/.pi`                           | `~/.pi`                       | rw   |
 | `~/.pi/agent/extensions`          | `~/.pi/agent/extensions`      | ro   |
-| `~/.claude` (claude only)         | `~/.claude`                   | ro   |
-| `~/.claude/project` (claude only) | `~/.claude/project`           | rw   |
+| `~/.claude` (claude only)         | `~/.claude`                   | rw   |
 | `~/.claude.json` (claude only)    | `~/.claude.json`              | rw   |
 | `~/.gitconfig`                    | `~/.gitconfig`                | ro   |
 | `pibox-cache` volume              | `~/.cache`                    | rw   |
-| `/etc/fonts`                      | `/etc/fonts`                  | ro   |
-| `/usr/share/fonts`                | `/usr/share/fonts`            | ro   |
-| `/var/cache/fontconfig`           | `/var/cache/fontconfig`       | ro   |
 | host CA bundle                    | `/etc/ssl/host-ca-bundle.pem` | ro   |
