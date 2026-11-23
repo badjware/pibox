@@ -133,6 +133,16 @@ Forward Wayland for GUI apps:
 ./launch.py --unsafe-host-wayland
 ```
 
+With `--unsafe-enable-docker`, sessions in the same working directory share one
+Docker daemon. Its images and build cache persist between sessions in a volume
+per working directory, named `pibox-docker-<path>` (`-ro` with `--read-only`).
+pibox never removes these volumes. List and remove them with:
+
+```sh
+docker volume ls --filter name=pibox-docker-
+docker volume rm pibox-docker-home-me-develop-project
+```
+
 ## Shell completion
 
 A zsh completion is provided at `completions/_pibox`. To enable it, add the

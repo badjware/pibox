@@ -7,6 +7,7 @@ ownership.
 """
 
 import argparse
+import fcntl
 import os
 import pwd
 import re
@@ -44,6 +45,9 @@ DIND_IMAGE = "docker:dind-rootless"
 # both containers. It must be outside /run, which rootlesskit copies up into
 # its own mount namespace.
 DOCKER_RUN_DIR = "/pibox-docker"
+# Data directory of the sidecar daemon, a named volume that persists the
+# images and the build cache between sessions.
+DOCKER_DATA_DIR = "/pibox-docker-data"
 # Run as root in the sidecar. DIND_IMAGE only has passwd and subuid entries
 # for its own user (UID 1000), and the daemon must run as the host user so
 # that files written in the workdir belong to the host user.
@@ -55,12 +59,14 @@ user=$(grep "^[^:]*:[^:]*:$HOST_UID:" /etc/passwd | cut -d: -f1)
 home=$(grep "^[^:]*:[^:]*:$HOST_UID:" /etc/passwd | cut -d: -f6)
 grep -q "^$user:" /etc/subuid || echo "$user:100000:65536" >> /etc/subuid
 grep -q "^$user:" /etc/subgid || echo "$user:100000:65536" >> /etc/subgid
-# the data directory is an anonymous volume, so it is not on overlayfs
+# the image entrypoint checks that ~/.local/share/docker is writable
 mkdir -p "$home/.local/share/docker"
-chown "$HOST_UID:$HOST_GID" "$home" "$home/.local" "$home/.local/share" "$home/.local/share/docker" "$XDG_RUNTIME_DIR"
+chown "$HOST_UID:$HOST_GID" "$home" "$home/.local" "$home/.local/share" "$home/.local/share/docker" \
+    "$XDG_RUNTIME_DIR" "$DOCKER_DATA_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 # without arguments, the image entrypoint also listens on TCP
-exec su -s /bin/sh "$user" -c "exec dockerd-entrypoint.sh dockerd --host=unix://$XDG_RUNTIME_DIR/docker.sock"
+exec su -s /bin/sh "$user" -c \
+    "exec dockerd-entrypoint.sh dockerd --host=unix://$XDG_RUNTIME_DIR/docker.sock --data-root=$DOCKER_DATA_DIR"
 '''
 
 
@@ -208,49 +214,71 @@ def build_images(harness, build, pull):
     return local
 
 
-def pick_container_name(workdir):
+def pick_container_name(workdir, suffix=""):
     """Return a free container name based on the working directory name.
 
     Like the tmux sessions: "home" for $HOME, else the directory name, with
-    -2, -3, ... appended when the name or the name of its Docker sidecar
-    (NAME-docker) is taken.
+    -2, -3, ... appended when the name is taken.
 
     Args:
         workdir: resolved working directory.
+        suffix: appended to the directory name, before the number.
     """
     base = "home" if workdir == HOME else re.sub(r"[^a-z0-9-]", "-", workdir.name.lower()).strip("-") or "root"
+    base += suffix
     out = subprocess.run(["docker", "ps", "-a", "--format", "{{.Names}}"], capture_output=True, text=True).stdout
     taken = set(out.split())
     name, i = base, 2
-    while name in taken or f"{name}-docker" in taken:
+    while name in taken:
         name, i = f"{base}-{i}", i + 1
     return name
 
 
-def start_docker_sidecar(name, workdir_volume, ca_bundle):
-    """Start a rootless dockerd in a privileged container next to the agent.
+def docker_sidecar(workdir, workdir_volume, ca_bundle):
+    """Return the Docker sidecar of the workdir, and start it if needed.
 
-    The agent reaches the daemon through its socket in the volume NAME,
-    mounted at DOCKER_RUN_DIR in both containers. The workdir is mounted at
-    the same path so that bind mounts from the agent resolve to the same
-    files.
+    Sessions with the same workdir mount share one sidecar: a rootless dockerd
+    in a privileged container next to the agents. The agents reach the daemon
+    through its socket in the volume of the same name, mounted at
+    DOCKER_RUN_DIR. The workdir is mounted at the same path so that bind
+    mounts from the agents resolve to the same files. The daemon data is in
+    a named volume per workdir mount, which is kept after the sidecar stops;
+    only one sidecar at a time uses it, because there is at most one sidecar
+    per workdir mount.
+
+    Call with the session lock held.
 
     Args:
-        name: name of the sidecar container and of the socket volume.
+        workdir: resolved working directory.
         workdir_volume: Docker -v spec of the workdir in the agent container.
         ca_bundle: host CA bundle path, or None.
+
+    Returns:
+        The name of the sidecar container and of its socket volume.
     """
+    label = f"pibox.docker-workdir={workdir_volume}"
+    out = subprocess.run(["docker", "ps", "--filter", f"label={label}", "--format", "{{.Names}}"],
+                         capture_output=True, text=True).stdout.split()
+    if out:
+        wait_for_daemon(out[0])
+        return out[0]
+
+    name = pick_container_name(workdir, "-docker")
+    read_only = "ro" in (workdir_volume.split(":") + [""])[2].split(",")
+    data_volume = "pibox-docker-" + re.sub(r"[^a-z0-9-]", "-", str(workdir).lower()).strip("-") + \
+        ("-ro" if read_only else "")
     # a volume left by a killed session would keep a stale socket
     subprocess.run(["docker", "volume", "rm", name], capture_output=True)
     cmd = [
-        "docker", "run", "-d", "--rm", "--privileged", "--user", "0", "--name", name,
+        "docker", "run", "-d", "--rm", "--privileged", "--user", "0", "--name", name, "--label", label,
         "-v", workdir_volume,
         "-v", f"{name}:{DOCKER_RUN_DIR}",
-        "-v", f"/home/{HOST_USER}/.local/share/docker",
+        "-v", f"{data_volume}:{DOCKER_DATA_DIR}",
         "-e", f"HOST_UID={HOST_UID}",
         "-e", f"HOST_GID={HOST_GID}",
         "-e", f"HOST_USER={HOST_USER}",
         "-e", f"XDG_RUNTIME_DIR={DOCKER_RUN_DIR}",
+        "-e", f"DOCKER_DATA_DIR={DOCKER_DATA_DIR}",
     ]
     if ca_bundle:
         cmd += ["-v", f"{ca_bundle}:/etc/ssl/host-ca-bundle.pem:ro",
@@ -259,6 +287,12 @@ def start_docker_sidecar(name, workdir_volume, ca_bundle):
     print(f"+ {shlex.join(cmd[:-1])} <DIND_SCRIPT>", file=sys.stderr)
     if subprocess.run(cmd, stdout=subprocess.DEVNULL).returncode != 0:
         die("could not start the Docker sidecar", 1)
+    wait_for_daemon(name)
+    return name
+
+
+def wait_for_daemon(name):
+    """Wait until the Docker daemon of the sidecar NAME answers; exit if it does not."""
     for _ in range(60):
         version = ["docker", "exec", name, "docker", "-H", f"unix://{DOCKER_RUN_DIR}/docker.sock", "version"]
         if subprocess.run(version, capture_output=True).returncode == 0:
@@ -268,6 +302,20 @@ def start_docker_sidecar(name, workdir_volume, ca_bundle):
         time.sleep(0.5)
     subprocess.run(["docker", "logs", "--tail", "50", name])
     die("the rootless Docker daemon did not start", 1)
+
+
+def lock_sessions():
+    """Take an exclusive lock shared by every pibox session on this host.
+
+    It serializes the start and the removal of the shared Docker sidecars.
+    The lock is on this script, so no file is created.
+
+    Returns:
+        The locked file; closing it releases the lock.
+    """
+    f = open(__file__)
+    fcntl.flock(f, fcntl.LOCK_EX)
+    return f
 
 
 def remove_volume(name):
@@ -311,7 +359,6 @@ def main():
     image = build_images(opts.harness, opts.build, opts.pull)
 
     name = pick_container_name(workdir)
-    docker_sidecar = f"{name}-docker" if opts.unsafe_enable_docker else None
 
     # Drop all caps and re-add only what the entrypoint needs.
     # Also block setuid/setgid binaries from gaining new privileges.
@@ -346,7 +393,7 @@ def main():
         env["XDG_RUNTIME_DIR"] = runtime_dir
         env["WAYLAND_DISPLAY"] = os.environ["WAYLAND_DISPLAY"]
         env["XDG_SESSION_TYPE"] = "wayland"
-    if docker_sidecar:
+    if opts.unsafe_enable_docker:
         env["DOCKER_HOST"] = f"unix://{DOCKER_RUN_DIR}/docker.sock"
 
     # Resolve the final volume list.
@@ -382,8 +429,6 @@ def main():
         add_default(HOME / ".config/gcx", f"{container_home}/.config/gcx", "ro")
     if opts.unsafe_host_wayland:
         volumes[str(wayland_socket)] = f"{wayland_socket}:{wayland_socket}:rw"
-    if docker_sidecar:
-        volumes[DOCKER_RUN_DIR] = f"{docker_sidecar}:{DOCKER_RUN_DIR}"
     for dest, spec in user_volumes:
         volumes[dest] = spec
     # When launched from $HOME, the workdir is read-only to avoid exposing the
@@ -399,31 +444,43 @@ def main():
     args += [arg for key, value in env.items() for arg in ("-e", f"{key}={value}")]
     args += [arg for spec in opts.env for arg in ("-e", spec)]
 
-    if sys.stdin.isatty() and sys.stdout.isatty():
+    tty = sys.stdin.isatty() and sys.stdout.isatty()
+    if tty:
         args += ["-it"]
 
-    cmd = [
-        "docker", "run", "--rm", "--init",
-        "--name", name,
-        "-w", str(workdir),
-        "--ipc=none",
-        "--pids-limit=1024",
-        *args,
-        image, *agent_args,
-    ]
+    if opts.unsafe_enable_docker and opts.pull:
+        run(["docker", "pull", DIND_IMAGE])
+    sidecar = None
     try:
-        if docker_sidecar:
-            if opts.pull:
-                run(["docker", "pull", DIND_IMAGE])
-            start_docker_sidecar(docker_sidecar, volumes[str(workdir)], ca_bundle)
-        print(f"+ {shlex.join(cmd)}", file=sys.stderr)
-        return subprocess.run(cmd).returncode
+        # The agent container is created with the lock held, so that a
+        # session that exits does not remove a sidecar this one is about to use.
+        with lock_sessions():
+            if opts.unsafe_enable_docker:
+                sidecar = docker_sidecar(workdir, volumes[str(workdir)], ca_bundle)
+                args = ["--label", f"pibox.docker-sidecar={sidecar}", "-v", f"{sidecar}:{DOCKER_RUN_DIR}", *args]
+            cmd = [
+                "docker", "create", "--rm", "--init",
+                "--name", name,
+                "-w", str(workdir),
+                "--ipc=none",
+                "--pids-limit=1024",
+                *args,
+                image, *agent_args,
+            ]
+            print(f"+ {shlex.join(cmd)}", file=sys.stderr)
+            if subprocess.run(cmd, stdout=subprocess.DEVNULL).returncode != 0:
+                die("could not create the agent container", 1)
+        return subprocess.run(["docker", "start", "-a", *(["-i"] if tty else []), name]).returncode
     finally:
-        # --rm cannot clean up when the docker CLI itself is killed
-        subprocess.run(["docker", "rm", "-f", name], capture_output=True)
-        if docker_sidecar:
-            subprocess.run(["docker", "rm", "-f", docker_sidecar], capture_output=True)
-            remove_volume(docker_sidecar)
+        with lock_sessions():
+            # --rm cannot clean up when the docker CLI itself is killed
+            subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+            if sidecar:
+                users = subprocess.run(["docker", "ps", "-a", "-q", "--filter", f"label=pibox.docker-sidecar={sidecar}"],
+                                       capture_output=True, text=True).stdout.split()
+                if not users:
+                    subprocess.run(["docker", "rm", "-f", sidecar], capture_output=True)
+                    remove_volume(sidecar)
 
 
 def exit_on_signal(signum, _frame):
