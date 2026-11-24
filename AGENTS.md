@@ -17,7 +17,6 @@ Dockerfile.pi-web                   # extends pi; installs @agegr/pi-web
 common/
   image_AGENTS.md                   # AGENTS.md baked into the image at /AGENTS.md (and /CLAUDE.md for claude)
   entrypoint.sh                     # container entrypoint
-  chromium, chrome-policies/        # chromium wrapper and policies
 contrib/systemd/                    # pi-web user units
 completions/_pibox                  # zsh completion
 ```
@@ -99,6 +98,10 @@ Build order when using `--build`: `Dockerfile.base` → `Dockerfile.<harness>`. 
 ### pi-web
 
 `pi-web` runs [Pi Web](https://github.com/agegr/pi-web) (`@agegr/pi-web`). `common/entrypoint.sh` execs `pi-web` on `0.0.0.0:30141` (set through `PI_WEB_HOSTNAME` and `PORT`). `launch.py` publishes `127.0.0.1:${PIBOX_PI_WEB_PORT:-30141}:30141` unless any `--port` is given, in which case only the user's ports are published. With `--unsafe-host-net`, it sets `PI_WEB_HOSTNAME=127.0.0.1` and `PORT=${PIBOX_PI_WEB_PORT:-30141}` instead, since there is no port mapping. Pi Web keeps its state in `~/.pi/agent`, so it needs no extra mounts. `Dockerfile.pi-web` sets `PI_WEB_NO_OPEN=1`.
+
+### Browser
+
+`Dockerfile.base` installs Camoufox (Firefox-based) through the npm package `camoufox`. npm installs its `playwright-core` peer dependency inside `camoufox/node_modules`, so scripts cannot `require("playwright-core")` directly. At build time, `camoufox fetch` runs with `XDG_CACHE_HOME=/opt`, so the browser and the fingerprint model ship in the image at `/opt/camoufox` and match `CAMOUFOX_VERSION`. `/opt/camoufox/browser` is a symlink to the fetched build. `CAMOUFOX_EXECUTABLE_PATH` and `CAMOUFOX_FPGEN_DATA` point to it, so Camoufox does not download anything at launch. The build deletes the GeoIP database, because Camoufox only reads it from `~/.cache/camoufox` (the `pibox-cache` volume), where it downloads on first use with `geoip: true`.
 
 ## common/image_AGENTS.md
 

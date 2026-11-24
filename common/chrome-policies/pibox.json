@@ -1,7 +1,0 @@
-{
-    "DefaultBrowserSettingEnabled": false,
-    "PasswordManagerEnabled": false,
-    "PasswordLeakDetectionEnabled": false,
-    "AutofillCreditCardEnabled": false,
-    "AutofillAddressEnabled": false
-}

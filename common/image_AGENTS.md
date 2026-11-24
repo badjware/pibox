@@ -15,4 +15,7 @@ You run as a user that mirrors the host's UID, GID, and username, so files you c
 Docker may be available through a daemon in another container. When it is enabled, `DOCKER_HOST` is set, and the working directory is available to containers at the same path. Other paths, such as `~/.pi` or `/tmp`, are not: a bind mount of them gets files from the daemon's own container.
 
 ## Display
-When the user enables it, `WAYLAND_DISPLAY` is set and graphical programs such as `chromium` and `wl-clipboard` can use the host display.
+When the user enables it, `WAYLAND_DISPLAY` is set and graphical programs such as `wl-clipboard` and a headed Camoufox can use the host display.
+
+## Browser
+Camoufox, a Firefox-based browser, is installed with its Node module (`require("camoufox")`). `Camoufox()` returns a Playwright `Browser`. The browser is in `/opt/camoufox`, and `CAMOUFOX_EXECUTABLE_PATH` points to it. Do not run `camoufox fetch`.

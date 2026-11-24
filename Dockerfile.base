@@ -1,12 +1,12 @@
 FROM archlinux:latest
 
-ARG PLAYWRIGHT_VERSION=1.64.1
-ARG TRAFILATURA_VERSION=2.3.1
-ARG GCX_VERSION=1.7.1
+ARG CAMOUFOX_VERSION=0.5.9
+ARG TRAFILATURA_VERSION=2.4.0
+ARG GCX_VERSION=1.8.0
 
 RUN pacman -Syu --noconfirm --needed \
         nodejs npm python python-pipx python-filelock go gcc fd ripgrep jq yq bc zip unzip git vim tmux make diffutils \
-        chromium qt6-wayland wl-clipboard \
+        gtk3 dbus-glib libxt nss alsa-lib wl-clipboard \
         ncurses \
         ca-certificates curl \
         docker docker-compose docker-buildx \
@@ -19,9 +19,14 @@ ENV PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin
 # no Secret Service in the container
 ENV GCX_KEYCHAIN=off
 
-# playwright
+# camoufox: the browser ships in the image, so it matches CAMOUFOX_VERSION;
+# the GeoIP database downloads to ~/.cache/camoufox on first use
+ENV CAMOUFOX_EXECUTABLE_PATH=/opt/camoufox/browser/camoufox-bin CAMOUFOX_FPGEN_DATA=/opt/camoufox/fpgen
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
-    npm install -g patchright@${PLAYWRIGHT_VERSION}
+    npm install -g camoufox@${CAMOUFOX_VERSION} \
+    && XDG_CACHE_HOME=/opt camoufox fetch \
+    && ln -s /opt/camoufox/browsers/official/* /opt/camoufox/browser \
+    && rm -rf /opt/camoufox/geoip
 
 # trafilatura
 RUN pipx install trafilatura==${TRAFILATURA_VERSION}
@@ -36,8 +41,6 @@ RUN pacman -Rns --noconfirm sudo openssh 2>/dev/null || true \
 
 COPY common/image_AGENTS.md /AGENTS.md
 COPY common/entrypoint.sh /entrypoint.sh
-COPY common/chromium /usr/local/bin/chromium
-COPY common/chrome-policies/pibox.json /etc/chromium/policies/managed/pibox.json
 
 WORKDIR /
 
