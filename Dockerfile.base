@@ -10,7 +10,6 @@ RUN pacman -Syu --noconfirm --needed \
         ncurses \
         ca-certificates curl \
         docker docker-compose docker-buildx \
-        iproute2 containerd iptables \
         kubectl aws-cli-v2
 
 ENV EDITOR=vim
