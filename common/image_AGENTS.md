@@ -19,3 +19,5 @@ When the user enables it, `WAYLAND_DISPLAY` is set and graphical programs such a
 
 ## Browser
 Camoufox, a Firefox-based browser, is installed with its Node module (`require("camoufox")`). `Camoufox()` returns a Playwright `Browser`. The browser is in `/opt/camoufox`, and `CAMOUFOX_EXECUTABLE_PATH` points to it. Do not run `camoufox fetch`.
+
+Chromium is also installed. Use it with `require("playwright-core").chromium.launch()`. It is in `/opt/playwright` (`PLAYWRIGHT_BROWSERS_PATH`).

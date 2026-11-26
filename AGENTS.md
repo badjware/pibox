@@ -101,7 +101,9 @@ Build order when using `--build`: `Dockerfile.base` → `Dockerfile.<harness>`. 
 
 ### Browser
 
-`Dockerfile.base` installs Camoufox (Firefox-based) through the npm package `camoufox`. npm installs its `playwright-core` peer dependency inside `camoufox/node_modules`, so scripts cannot `require("playwright-core")` directly. At build time, `camoufox fetch` runs with `XDG_CACHE_HOME=/opt`, so the browser and the fingerprint model ship in the image at `/opt/camoufox` and match `CAMOUFOX_VERSION`. `/opt/camoufox/browser` is a symlink to the fetched build. `CAMOUFOX_EXECUTABLE_PATH` and `CAMOUFOX_FPGEN_DATA` point to it, so Camoufox does not download anything at launch. The build deletes the GeoIP database, because Camoufox only reads it from `~/.cache/camoufox` (the `pibox-cache` volume), where it downloads on first use with `geoip: true`.
+`Dockerfile.base` installs Camoufox (Firefox-based) through the npm package `camoufox`. npm installs its `playwright-core` peer dependency inside `camoufox/node_modules`. At build time, `camoufox fetch` runs with `XDG_CACHE_HOME=/opt`, so the browser and the fingerprint model ship in the image at `/opt/camoufox` and match `CAMOUFOX_VERSION`. `/opt/camoufox/browser` is a symlink to the fetched build. `CAMOUFOX_EXECUTABLE_PATH` and `CAMOUFOX_FPGEN_DATA` point to it, so Camoufox does not download anything at launch. The build deletes the GeoIP database, because Camoufox only reads it from `~/.cache/camoufox` (the `pibox-cache` volume), where it downloads on first use with `geoip: true`.
+
+Chromium uses the same `playwright-core` copy, so the image has one Playwright version. `NODE_PATH` includes `/usr/lib/node_modules/camoufox/node_modules`, so scripts can `require("playwright-core")`. This also exposes the other camoufox dependencies. At build time, `playwright-core install chromium` downloads the Chromium build (and its headless shell) that matches this Playwright version into `PLAYWRIGHT_BROWSERS_PATH=/opt/playwright`. A `CAMOUFOX_VERSION` bump can change the Playwright version, and with it the Chromium version.
 
 ## common/image_AGENTS.md
 

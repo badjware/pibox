@@ -14,7 +14,8 @@ RUN pacman -Syu --noconfirm --needed \
         kubectl aws-cli-v2
 
 ENV EDITOR=vim
-ENV NODE_PATH=/usr/local/lib/node_modules:/usr/lib/node_modules
+# camoufox/node_modules exposes the playwright-core copy that camoufox ships
+ENV NODE_PATH=/usr/local/lib/node_modules:/usr/lib/node_modules:/usr/lib/node_modules/camoufox/node_modules
 ENV PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin
 # no Secret Service in the container
 ENV GCX_KEYCHAIN=off
@@ -27,6 +28,11 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
     && XDG_CACHE_HOME=/opt camoufox fetch \
     && ln -s /opt/camoufox/browsers/official/* /opt/camoufox/browser \
     && rm -rf /opt/camoufox/geoip
+
+# chromium: driven by the playwright-core copy that camoufox ships,
+# so the browser matches its Playwright version
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+RUN node /usr/lib/node_modules/camoufox/node_modules/playwright-core/cli.js install chromium
 
 # trafilatura
 RUN pipx install trafilatura==${TRAFILATURA_VERSION}
