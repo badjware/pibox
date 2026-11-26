@@ -93,7 +93,7 @@ def parse_args(argv):
     p.add_argument("-H", "--harness", choices=IMAGES, default="pi", help="agent to run (default: pi)")
     p.add_argument("--build", action="store_true", help="build images locally instead of pulling")
     p.add_argument("--pull", action="store_true", help="pull latest image before launch")
-    p.add_argument("-r", "--read-only", "--ro", action="store_true", help="mount the workdir read-only")
+    p.add_argument("-r", "--read-only", action="store_true", help="mount the workdir read-only")
     p.add_argument("-v", "--volume", action="append", default=[],
                    help="bind-mount an extra volume (repeatable; Docker -v syntax); "
                         "PATH or PATH:ro|rw mounts PATH at the same path")

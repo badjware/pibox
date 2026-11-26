@@ -46,7 +46,7 @@ completions/_pibox                  # zsh completion
 | `--unsafe-enable-gcx` | (none, intentional) | mount `~/.config/gcx` into the container (gcx is pre-installed) |
 | `--unsafe-host-wayland` | (none, intentional) | mount the Wayland socket into the container and forward Wayland env vars |
 | `--unsafe-host-net` | (none, intentional) | share the host network namespace (`--network=host`) |
-| `--read-only`, `--ro` | `-r` | mount the workdir read-only |
+| `--read-only` | `-r` | mount the workdir read-only |
 | `--volume` | `-v` | bind-mount an extra volume (repeatable; same syntax as `docker run -v`, except `PATH` or `PATH:ro\|rw` bind-mounts `PATH` at the same absolute path) |
 | `--env` | `-e` | set an environment variable (repeatable; same syntax as `docker run -e`; `VAR` alone copies the host value; overrides variables set by pibox) |
 | `--extra-package` | `-P` | install an extra pacman or AUR package at container startup (repeatable; non-persistent) |
@@ -71,7 +71,7 @@ AUR builds are not recursive: an AUR package whose own dependencies are AUR-only
 
 Zsh completion lives at `completions/_pibox`. When adding, removing, or renaming a flag in `launch.py`, update `completions/_pibox` to match. The flag list is duplicated by design (no auto-generation); keep the two in sync.
 
-Convention: list only the longest long form of each flag in the completion. Short forms (`-b`, `-p`, etc.) and shorter long-form aliases (e.g. `--ro` for `--read-only`) still work at the parser level but are omitted from the menu to reduce noise. One entry per flag, no duplicates.
+Convention: list only the longest long form of each flag in the completion. Short forms (`-b`, `-p`, etc.) still work at the parser level but are omitted from the menu to reduce noise. One entry per flag, no duplicates.
 
 `--help` / `-h` prints the argparse usage summary from `launch.py`.
 

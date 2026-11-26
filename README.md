@@ -68,7 +68,7 @@ alias claudebox='/path/to/pibox/launch.py --harness claude'
 | `--unsafe-enable-gcx`                   |       | Mount `~/.config/gcx` into the container.                                                                                     |
 | `--unsafe-host-wayland`                 |       | Mount the Wayland socket into the container and forward Wayland environment variables.                                        |
 | `--unsafe-host-net`                     |       | Share the host network namespace.                                                                                             |
-| `--read-only`, `--ro`                   | `-r`  | Mount the working directory read-only. It is always read-only from `$HOME`, unless a `--volume` for `$HOME` is given.         |
+| `--read-only`                           | `-r`  | Mount the working directory read-only. It is always read-only from `$HOME`, unless a `--volume` for `$HOME` is given.         |
 | `--volume <spec>`                       | `-v`  | Bind-mount an extra volume (repeatable, same syntax as `docker run -v`).                                                      |
 | `--env <var>[=<value>]`                 | `-e`  | Set an environment variable in the container (repeatable, same syntax as `docker run -e`).                                    |
 | `--extra-package <name>`                | `-P`  | Install an extra pacman or AUR package at container startup. Repeatable and non-persistent.                                   |
